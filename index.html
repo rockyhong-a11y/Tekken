@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Life Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>🎮 Game Life Tracker</h1>
+      <p class="tagline">클리어 · 플레이 중 · 플레이 예정 게임을 한 눈에</p>
+    </div>
+    <div class="profile-bar">
+      <label for="profileSelect">프로필</label>
+      <select id="profileSelect"></select>
+      <button id="newProfileBtn" type="button" class="ghost">＋ 새 프로필</button>
+      <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
+      <button id="settingsBtn" type="button" class="ghost">⚙ 설정</button>
+    </div>
+  </header>
+
+  <section id="settingsPanel" class="settings-panel hidden">
+    <h2>설정</h2>
+    <label for="rawgKey">RAWG API 키 (선택)</label>
+    <p class="help">
+      게임명을 입력하면 장르·발매일·이미지·설명을 자동으로 채워줍니다.
+      <a href="https://rawg.io/apidocs" target="_blank" rel="noreferrer noopener">무료 발급 받기</a>
+      · 미입력 시 수동 입력 모드로 동작합니다.
+    </p>
+    <div class="row">
+      <input type="text" id="rawgKey" placeholder="RAWG API key" />
+      <button id="saveRawgKey" type="button">저장</button>
+    </div>
+    <p class="muted" id="rawgKeyStatus"></p>
+  </section>
+
+  <main>
+    <section class="form-card">
+      <h2>새 게임 추가</h2>
+      <form id="gameForm" class="game-form">
+        <div class="field">
+          <label for="title">게임명 *</label>
+          <div class="lookup-row">
+            <input type="text" id="title" required placeholder="예: Tekken 8" autocomplete="off" />
+            <button type="button" id="lookupBtn">정보 불러오기</button>
+          </div>
+          <div id="lookupResults" class="lookup-results"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="status">상태 *</label>
+            <select id="status" required>
+              <option value="planned">플레이 예정</option>
+              <option value="playing">플레이 중</option>
+              <option value="cleared">클리어</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="platform">플랫폼 *</label>
+            <select id="platform" required>
+              <option value="">선택하세요</option>
+              <option>PC (Steam)</option>
+              <option>PC (Epic)</option>
+              <option>PC (GOG)</option>
+              <option>PC (Microsoft Store)</option>
+              <option>PlayStation 5</option>
+              <option>PlayStation 4</option>
+              <option>Xbox Series X|S</option>
+              <option>Xbox One</option>
+              <option>Nintendo Switch</option>
+              <option>Nintendo Switch 2</option>
+              <option>Steam Deck</option>
+              <option>iOS</option>
+              <option>Android</option>
+              <option>Arcade</option>
+              <option>기타</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="genres">장르</label>
+            <input type="text" id="genres" placeholder="액션, RPG (자동 채움 가능)" />
+          </div>
+          <div class="field">
+            <label for="released">발매일</label>
+            <input type="text" id="released" placeholder="YYYY-MM-DD" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="description">설명 / 기본 정보</label>
+          <textarea id="description" rows="3" placeholder="자동 채움 또는 직접 입력"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="note">메모</label>
+          <textarea id="note" rows="2" placeholder="클리어 일자, 감상 등"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="screenshots">스크린샷 (여러 장 선택 가능)</label>
+          <input type="file" id="screenshots" accept="image/*" multiple />
+          <div id="screenshotPreview" class="screenshot-preview"></div>
+        </div>
+
+        <input type="hidden" id="editingId" />
+        <input type="hidden" id="coverImage" />
+
+        <div class="actions">
+          <button type="submit" id="submitBtn">추가</button>
+          <button type="button" id="resetBtn" class="ghost">초기화</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="library">
+      <div class="library-header">
+        <h2>내 라이브러리</h2>
+        <div class="filters">
+          <input type="search" id="searchInput" placeholder="🔍 게임명/장르 검색" />
+          <select id="filterStatus">
+            <option value="all">전체 상태</option>
+            <option value="cleared">클리어</option>
+            <option value="playing">플레이 중</option>
+            <option value="planned">플레이 예정</option>
+          </select>
+          <select id="filterPlatform">
+            <option value="all">전체 플랫폼</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div id="gameList" class="game-list"></div>
+      <p id="emptyState" class="empty hidden">아직 등록된 게임이 없습니다. 위 폼에서 첫 게임을 추가해보세요.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p class="muted">데이터는 이 브라우저에 저장됩니다 (LocalStorage). 프로필별로 분리되어 있어요.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
