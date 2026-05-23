@@ -4,30 +4,30 @@
 
 ## Stack
 
-- 단일 페이지 정적 웹앱 (HTML / CSS / Vanilla JS, 빌드 도구 없음)
+- **단일 파일 스탠드얼론 웹앱** — `index.html` 하나에 HTML / CSS / Vanilla JS 모두 인라인
+- 빌드 도구·서버·의존성 없음. 외부 스크립트도 없음
 - 데이터 저장: 브라우저 `localStorage` (프로필명별 분리)
-- 외부 API: [RAWG Video Games Database](https://rawg.io/apidocs) — 게임명으로 장르/기본 정보 조회
+- 외부 API (선택): [RAWG Video Games Database](https://rawg.io/apidocs) — 게임명으로 장르/기본 정보 조회
 
 ## 실행 방법
 
-빌드 도구 없음. 정적 파일이므로 다음 중 하나로 띄우면 됩니다.
+`index.html` 파일 하나만 있으면 됩니다. 다음 중 어떤 방식이든 동작합니다.
 
 ```bash
-# 옵션 1: Python
-python3 -m http.server 8000
+# 옵션 1: 그냥 더블클릭 (file:// 프로토콜로 바로 실행됨)
 
-# 옵션 2: Node (npx, 글로벌 설치 불필요)
-npx serve .
+# 옵션 2: 로컬 서버로 띄우기
+python3 -m http.server 8000   # → http://localhost:8000
+npx serve .                   # 또는 이 방식
 ```
 
-`http://localhost:8000` 접속.
+USB·메신저·이메일로 `index.html` 한 파일만 공유해도 그대로 동작합니다.
 
 ## 파일 구조
 
 ```
-index.html   # 페이지 마크업
-styles.css   # 스타일 / 상태별 색상 토큰
-app.js       # 상태 관리, 저장, RAWG 호출, UI 렌더링
+index.html   # 모든 것 (마크업 + 스타일 + 로직)
+CLAUDE.md    # 프로젝트 안내
 ```
 
 ## 데이터 모델
