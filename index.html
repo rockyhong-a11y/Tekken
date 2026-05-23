@@ -403,10 +403,7 @@
       <form id="gameForm" class="game-form">
         <div class="field">
           <label for="title">게임명 *</label>
-          <div class="lookup-row">
-            <input type="text" id="title" required placeholder="예: Tekken 8" autocomplete="off" />
-            <button type="button" id="lookupBtn">정보 불러오기</button>
-          </div>
+          <input type="text" id="title" required placeholder="예: Tekken 8 / 철권 8 (입력하면 자동 검색)" autocomplete="off" />
           <div id="lookupResults" class="lookup-results"></div>
         </div>
 
@@ -684,16 +681,31 @@
     }
 
     // === RAWG lookup ===
+    // RAWG는 영문 타이틀이 우선이라 한글 쿼리는 영어로 번역 후 검색
+    async function toEnglish(text) {
+      if (!/[가-힣]/.test(text)) return text;
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ko|en`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return text;
+        const json = await res.json();
+        return (json.responseData && json.responseData.translatedText) || text;
+      } catch {
+        return text;
+      }
+    }
+
     async function rawgSearch(query) {
       const key = getRawgKey();
-      const url = `https://api.rawg.io/api/games?key=${encodeURIComponent(key)}&search=${encodeURIComponent(query)}&page_size=6`;
+      // page_size 40 = RAWG 응답 최대치
+      const url = `https://api.rawg.io/api/games?key=${encodeURIComponent(key)}&search=${encodeURIComponent(query)}&page_size=40`;
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`RAWG ${res.status}`);
         const json = await res.json();
         return json.results || [];
       } catch (err) {
-        alert('RAWG 조회 실패: ' + err.message);
+        console.warn('RAWG 조회 실패:', err.message);
         return null;
       }
     }
@@ -1003,16 +1015,41 @@
         updateRawgKeyStatus();
       });
 
-      // Lookup
-      $('lookupBtn').addEventListener('click', async () => {
-        const q = $('title').value.trim();
-        if (!q) {
-          alert('게임명을 먼저 입력하세요.');
-          return;
-        }
-        $('lookupResults').innerHTML = '<div class="muted" style="padding:6px">검색 중...</div>';
-        const results = await rawgSearch(q);
+      // Auto-search: 게임명 입력 시 RAWG와 실시간 싱크 (debounce + 한글 자동 번역)
+      let searchSeq = 0;
+      let debounceTimer = null;
+      const titleInput = $('title');
+      const resultsBox = $('lookupResults');
+
+      const runSearch = async (raw) => {
+        const seq = ++searchSeq;
+        const q = raw.trim();
+        if (q.length < 2) { resultsBox.innerHTML = ''; return; }
+        resultsBox.innerHTML = '<div class="muted" style="padding:6px">검색 중...</div>';
+        const engQuery = await toEnglish(q);
+        if (seq !== searchSeq) return;                  // 사용자가 이미 더 입력함 — 폐기
+        const results = await rawgSearch(engQuery);
+        if (seq !== searchSeq) return;
         renderLookupResults(results || []);
+      };
+
+      titleInput.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        const v = e.target.value;
+        debounceTimer = setTimeout(() => runSearch(v), 400);
+      });
+
+      // 입력 영역 바깥 클릭 시 결과 닫기
+      document.addEventListener('click', (e) => {
+        if (!titleInput.contains(e.target) && !resultsBox.contains(e.target)) {
+          resultsBox.innerHTML = '';
+        }
+      });
+      // 다시 포커스되면 마지막 쿼리로 검색 (입력값이 남아 있을 때)
+      titleInput.addEventListener('focus', () => {
+        if (titleInput.value.trim().length >= 2 && !resultsBox.innerHTML) {
+          runSearch(titleInput.value);
+        }
       });
 
       // Form
