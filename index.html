@@ -251,11 +251,107 @@
     .stat-pill.planned { color: var(--status-planned); background: var(--status-planned-bg); border-color: var(--status-planned); }
     .stat-pill.total { color: var(--muted); }
 
-    .game-list {
+    .view-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .view-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .view-toggle button {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: 7px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .view-toggle button.active {
+      background: var(--accent);
+      color: white;
+    }
+    .view-toggle button:hover:not(.active) {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .game-list.view-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       gap: 14px;
     }
+
+    .game-list.view-list { display: block; overflow-x: auto; }
+    .game-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .game-table th, .game-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .game-table th {
+      background: var(--surface-2);
+      cursor: pointer;
+      user-select: none;
+      font-weight: 600;
+      color: var(--muted);
+      position: sticky;
+      top: 0;
+      white-space: nowrap;
+    }
+    .game-table th:hover { color: var(--text); }
+    .game-table th.active { color: var(--text); }
+    .game-table th .sort-indicator { margin-left: 4px; font-size: 10px; opacity: 0.7; }
+    .game-table tbody tr { transition: background 0.1s; }
+    .game-table tbody tr:hover { background: var(--surface-2); }
+    .game-table .row-status {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .game-table .row-status.status-cleared { background: var(--status-cleared); }
+    .game-table .row-status.status-playing { background: var(--status-playing); }
+    .game-table .row-status.status-planned { background: var(--status-planned); }
+    .game-table .row-thumb {
+      width: 44px;
+      height: 26px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin-right: 8px;
+      vertical-align: middle;
+      background: #000;
+    }
+    .game-table .row-title {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .game-table .row-actions { white-space: nowrap; text-align: right; }
+    .game-table .row-actions a,
+    .game-table .row-actions button {
+      padding: 4px 8px;
+      font-size: 11px;
+      margin-left: 4px;
+      border-radius: 5px;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .game-table .row-actions .youtube {
+      background: #ff0033;
+      color: white;
+    }
+    .game-table .row-actions .youtube:hover { background: #cc0029; }
 
     .game-card {
       background: var(--surface-2);
@@ -491,6 +587,17 @@
           <select id="filterPlatform">
             <option value="all">전체 플랫폼</option>
           </select>
+          <select id="filterGenre">
+            <option value="all">전체 장르</option>
+          </select>
+          <button id="clearFilters" type="button" class="ghost" title="필터 초기화">↺</button>
+        </div>
+        <div class="view-controls">
+          <div class="view-toggle" role="tablist">
+            <button type="button" data-view="list">📋 목록</button>
+            <button type="button" data-view="cards">🃏 카드</button>
+          </div>
+          <button type="button" id="exportBtn">📥 엑셀 내보내기</button>
         </div>
       </div>
 
@@ -498,6 +605,7 @@
 
       <div id="gameList" class="game-list"></div>
       <p id="emptyState" class="empty hidden">아직 등록된 게임이 없습니다. 위 폼에서 첫 게임을 추가해보세요.</p>
+      <p id="filterEmpty" class="empty hidden">필터 조건에 맞는 게임이 없습니다.</p>
     </section>
   </main>
 
@@ -896,19 +1004,46 @@
       if ([...sel.options].some((o) => o.value === current)) sel.value = current;
     }
 
+    // === View / sort state ===
+    let viewMode = localStorage.getItem('gametracker:viewMode') || 'list';
+    let sortKey = 'createdAt';
+    let sortDir = 'desc';
+
     function filteredGames() {
       const q = $('searchInput').value.toLowerCase().trim();
       const fs = $('filterStatus').value;
       const fp = $('filterPlatform').value;
+      const fg = $('filterGenre').value;
       return state.games.filter((g) => {
         if (fs !== 'all' && g.status !== fs) return false;
         if (fp !== 'all' && g.platform !== fp) return false;
+        if (fg !== 'all' && !(g.genres || []).includes(fg)) return false;
         if (q) {
           const hay = [g.title, ...(g.genres || []), g.platform, g.note, g.description].join(' ').toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
       });
+    }
+
+    function sortedFiltered() {
+      const list = filteredGames().slice();
+      const dir = sortDir === 'asc' ? 1 : -1;
+      list.sort((a, b) => {
+        let av, bv;
+        if (sortKey === 'genres') { av = (a.genres || []).join(','); bv = (b.genres || []).join(','); }
+        else if (sortKey === 'status') {
+          const ord = { planned: 0, playing: 1, cleared: 2 };
+          av = ord[a.status] ?? 9; bv = ord[b.status] ?? 9;
+        }
+        else { av = a[sortKey] ?? ''; bv = b[sortKey] ?? ''; }
+        if (typeof av === 'string') av = av.toLowerCase();
+        if (typeof bv === 'string') bv = bv.toLowerCase();
+        if (av < bv) return -dir;
+        if (av > bv) return dir;
+        return 0;
+      });
+      return list;
     }
 
     function youtubeSearchUrl(title) {
@@ -949,11 +1084,21 @@
     }
 
     function renderList() {
-      const list = filteredGames();
       const container = $('gameList');
-      container.innerHTML = list.map(gameCardHTML).join('');
-      $('emptyState').classList.toggle('hidden', state.games.length > 0);
+      container.className = 'game-list view-' + viewMode;
+      const list = sortedFiltered();
 
+      const totalEmpty = state.games.length === 0;
+      const filterEmpty = !totalEmpty && list.length === 0;
+      $('emptyState').classList.toggle('hidden', !totalEmpty);
+      $('filterEmpty').classList.toggle('hidden', !filterEmpty);
+
+      if (totalEmpty || filterEmpty) { container.innerHTML = ''; return; }
+
+      if (viewMode === 'list') renderTable(container, list);
+      else renderCards(container, list);
+
+      // Common action wiring
       container.querySelectorAll('[data-action="edit"]').forEach((b) => {
         b.addEventListener('click', () => editGame(b.dataset.id));
       });
@@ -965,9 +1110,115 @@
       });
     }
 
+    function renderCards(container, list) {
+      container.innerHTML = list.map(gameCardHTML).join('');
+    }
+
+    function renderTable(container, list) {
+      const cols = [
+        { key: 'title', label: '게임명' },
+        { key: 'status', label: '상태' },
+        { key: 'platform', label: '플랫폼' },
+        { key: 'genres', label: '장르' },
+        { key: 'released', label: '발매일' },
+        { key: 'createdAt', label: '등록일' },
+      ];
+      const arrow = (k) => k === sortKey ? (sortDir === 'asc' ? '▲' : '▼') : '';
+      const headHtml = cols.map((c) =>
+        `<th data-sort="${c.key}" class="${c.key === sortKey ? 'active' : ''}">${c.label}<span class="sort-indicator">${arrow(c.key)}</span></th>`
+      ).join('') + '<th>액션</th>';
+
+      const rowsHtml = list.map((g) => {
+        const thumb = g.background_image
+          ? `<img src="${escapeHtml(g.background_image)}" class="row-thumb" alt="" />`
+          : '';
+        const genres = (g.genres || []).join(', ');
+        const created = g.createdAt ? new Date(g.createdAt).toLocaleDateString('ko-KR') : '';
+        return `
+          <tr>
+            <td><span class="row-title">${thumb}${escapeHtml(g.title)}</span></td>
+            <td><span class="row-status status-${g.status}"></span>${statusLabel(g.status)}</td>
+            <td>${escapeHtml(g.platform || '')}</td>
+            <td>${escapeHtml(genres)}</td>
+            <td>${escapeHtml(g.released || '')}</td>
+            <td>${created}</td>
+            <td class="row-actions">
+              <a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener" title="유튜브 공략">▶</a>
+              <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
+              <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `<table class="game-table"><thead><tr>${headHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
+
+      container.querySelectorAll('th[data-sort]').forEach((th) => {
+        th.addEventListener('click', () => {
+          const k = th.dataset.sort;
+          if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+          else { sortKey = k; sortDir = 'asc'; }
+          renderList();
+        });
+      });
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      localStorage.setItem('gametracker:viewMode', mode);
+      document.querySelectorAll('.view-toggle button').forEach((b) => {
+        b.classList.toggle('active', b.dataset.view === mode);
+      });
+      renderList();
+    }
+
+    function renderGenreFilter() {
+      const sel = $('filterGenre');
+      const current = sel.value || 'all';
+      const genres = new Set();
+      state.games.forEach((g) => (g.genres || []).forEach((x) => x && genres.add(x)));
+      const list = [...genres].sort();
+      sel.innerHTML = '<option value="all">전체 장르</option>' +
+        list.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+      if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+    }
+
+    // === CSV export (Excel-compatible UTF-8 with BOM) ===
+    function exportToCsv() {
+      if (!state.games.length) { alert('내보낼 게임이 없습니다.'); return; }
+      const headers = ['게임명', '상태', '플랫폼', '장르', '발매일', '설명', '메모', '스크린샷 수', '등록일'];
+      const rows = sortedFiltered().map((g) => [
+        g.title,
+        statusLabel(g.status),
+        g.platform || '',
+        (g.genres || []).join(', '),
+        g.released || '',
+        g.description || '',
+        g.note || '',
+        (g.screenshots || []).length,
+        g.createdAt ? new Date(g.createdAt).toLocaleDateString('ko-KR') : '',
+      ]);
+      const escape = (v) => {
+        const s = String(v ?? '');
+        return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const csv = '﻿' + [headers, ...rows].map((r) => r.map(escape).join(',')).join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `game-library-${state.currentProfile}-${date}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
     function renderAll() {
       renderStats();
       renderPlatformFilter();
+      renderGenreFilter();
       renderList();
     }
 
@@ -1064,6 +1315,23 @@
       $('searchInput').addEventListener('input', renderList);
       $('filterStatus').addEventListener('change', renderList);
       $('filterPlatform').addEventListener('change', renderList);
+      $('filterGenre').addEventListener('change', renderList);
+      $('clearFilters').addEventListener('click', () => {
+        $('searchInput').value = '';
+        $('filterStatus').value = 'all';
+        $('filterPlatform').value = 'all';
+        $('filterGenre').value = 'all';
+        renderList();
+      });
+
+      // View toggle
+      document.querySelectorAll('.view-toggle button').forEach((b) => {
+        b.addEventListener('click', () => setViewMode(b.dataset.view));
+      });
+      setViewMode(viewMode);
+
+      // Export
+      $('exportBtn').addEventListener('click', exportToCsv);
     }
 
     function updateRawgKeyStatus() {
