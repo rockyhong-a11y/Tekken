@@ -170,6 +170,35 @@
       box-shadow: var(--shadow);
     }
 
+    .category-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 32px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .category-tabs button {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: -1px;
+    }
+    .category-tabs button:hover { color: var(--text); background: var(--surface-2); }
+    .category-tabs button.active {
+      color: var(--text);
+      background: var(--surface);
+      border-color: var(--border);
+      border-bottom-color: var(--surface);
+    }
+    @media (max-width: 768px) {
+      .category-tabs { padding: 10px 12px 0; gap: 2px; }
+      .category-tabs button { padding: 9px 12px; font-size: 13px; flex: 1; text-align: center; }
+    }
+
     .settings-panel {
       margin: 16px 32px 0;
     }
@@ -556,8 +585,8 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1>🎮 Game Life Tracker</h1>
-      <p class="tagline">클리어 · 플레이 중 · 플레이 예정 게임을 한 눈에</p>
+      <h1>🎬 Life Tracker</h1>
+      <p class="tagline">게임 · 영화 · 애니메이션을 한 곳에서 기록</p>
     </div>
     <div class="profile-bar">
       <label for="profileSelect">프로필</label>
@@ -568,71 +597,69 @@
     </div>
   </header>
 
+  <nav class="category-tabs" id="categoryTabs" role="tablist">
+    <button type="button" data-cat="game" class="active">🎮 게임</button>
+    <button type="button" data-cat="movie">🎬 영화</button>
+    <button type="button" data-cat="anime">📺 애니메이션</button>
+  </nav>
+
   <section id="settingsPanel" class="settings-panel hidden">
     <h2>설정</h2>
-    <label for="rawgKey">RAWG API 키 (선택)</label>
+
+    <label for="rawgKey">RAWG API 키 — 🎮 게임 자동 채움</label>
     <p class="help">
-      기본 내장 키로 바로 동작합니다. 본인 키를 사용하고 싶다면 아래에 입력하세요 —
-      <a href="https://rawg.io/apidocs" target="_blank" rel="noreferrer noopener">무료 발급 받기</a>.
-      비워두면 다시 기본 키로 돌아갑니다.
+      기본 내장 키로 동작합니다. 본인 키를 입력하면 우선 사용 —
+      <a href="https://rawg.io/apidocs" target="_blank" rel="noreferrer noopener">무료 발급</a>.
     </p>
     <div class="row">
       <input type="text" id="rawgKey" placeholder="RAWG API key" />
       <button id="saveRawgKey" type="button">저장</button>
     </div>
     <p class="muted" id="rawgKeyStatus"></p>
+
+    <label for="tmdbKey" style="margin-top:14px; display:block">TMDB API 키 — 🎬 영화 자동 채움</label>
+    <p class="help">
+      영화 자동 채움에 필요합니다. 미입력 시 영화 항목은 수동 입력 —
+      <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer noopener">무료 발급</a>.
+    </p>
+    <div class="row">
+      <input type="text" id="tmdbKey" placeholder="TMDB API key (v3)" />
+      <button id="saveTmdbKey" type="button">저장</button>
+    </div>
+    <p class="muted" id="tmdbKeyStatus"></p>
+
+    <p class="muted" style="margin-top:14px">📺 애니메이션은 Jikan(MyAnimeList) API를 사용 — 키 불필요.</p>
   </section>
 
   <main>
     <section class="form-card">
-      <h2>새 게임 추가</h2>
+      <h2 id="formTitle">새 항목 추가</h2>
       <form id="gameForm" class="game-form">
         <div class="field">
-          <label for="title">게임명 *</label>
-          <input type="text" id="title" required placeholder="예: Tekken 8 / 철권 8 (입력하면 자동 검색)" autocomplete="off" />
+          <label for="title" id="titleLabel">제목 *</label>
+          <input type="text" id="title" required placeholder="입력하면 자동 검색" autocomplete="off" />
           <div id="lookupResults" class="lookup-results"></div>
         </div>
 
         <div class="grid-2">
           <div class="field">
             <label for="status">상태 *</label>
-            <select id="status" required>
-              <option value="planned">플레이 예정</option>
-              <option value="playing">플레이 중</option>
-              <option value="cleared">클리어</option>
-            </select>
+            <select id="status" required></select>
           </div>
 
           <div class="field">
-            <label for="platform">플랫폼 *</label>
-            <select id="platform" required>
-              <option value="">선택하세요</option>
-              <option>PC (Steam)</option>
-              <option>PC (Epic)</option>
-              <option>PC (GOG)</option>
-              <option>PC (Microsoft Store)</option>
-              <option>PlayStation 5</option>
-              <option>PlayStation 4</option>
-              <option>Xbox Series X|S</option>
-              <option>Xbox One</option>
-              <option>Nintendo Switch</option>
-              <option>Nintendo Switch 2</option>
-              <option>Steam Deck</option>
-              <option>iOS</option>
-              <option>Android</option>
-              <option>Arcade</option>
-              <option>기타</option>
-            </select>
+            <label for="platform" id="platformLabel">플랫폼 *</label>
+            <select id="platform" required></select>
           </div>
         </div>
 
         <div class="grid-2">
           <div class="field">
             <label for="genres">장르</label>
-            <input type="text" id="genres" placeholder="액션, RPG (자동 채움 가능)" />
+            <input type="text" id="genres" placeholder="자동 채움 또는 직접 입력" />
           </div>
           <div class="field">
-            <label for="released">발매일</label>
+            <label for="released" id="releasedLabel">발매일</label>
             <input type="text" id="released" placeholder="YYYY-MM-DD" />
           </div>
         </div>
@@ -709,12 +736,51 @@
       profiles: 'gametracker:profiles',
       currentProfile: 'gametracker:currentProfile',
       rawgKey: 'gametracker:rawgKey',
+      tmdbKey: 'gametracker:tmdbKey',
+      category: 'gametracker:category',
       data: (profile) => `gametracker:profile:${profile}`,
     };
 
-    // 내장 기본 RAWG 키 (공유용). 사용자가 설정 패널에서 본인 키를 입력하면 그쪽이 우선.
+    // 내장 기본 RAWG 키. 사용자가 설정 패널에서 본인 키를 입력하면 그쪽이 우선.
     const DEFAULT_RAWG_KEY = 'cde46377c7d74bbd88402d2b9f825547';
     const getRawgKey = () => localStorage.getItem(KEYS.rawgKey) || DEFAULT_RAWG_KEY;
+    const getTmdbKey = () => localStorage.getItem(KEYS.tmdbKey) || '';
+
+    // === Categories ===
+    const CATEGORIES = {
+      game:  { titleLabel: '게임명',   platformLabel: '플랫폼',     releasedLabel: '발매일',
+               formTitle: '새 게임 추가',     placeholder: '예: Tekken 8 / 철권 8 (입력하면 자동 검색)' },
+      movie: { titleLabel: '영화 제목', platformLabel: '시청 매체',  releasedLabel: '개봉일',
+               formTitle: '새 영화 추가',     placeholder: '예: Inception / 인셉션 (입력하면 자동 검색)' },
+      anime: { titleLabel: '애니 제목', platformLabel: '시청 매체',  releasedLabel: '방영일',
+               formTitle: '새 애니메이션 추가', placeholder: '예: One Piece / 원피스 (입력하면 자동 검색)' },
+    };
+    const PLATFORMS = {
+      game: ['PC (Steam)','PC (Epic)','PC (GOG)','PC (Microsoft Store)',
+             'PlayStation 5','PlayStation 4','Xbox Series X|S','Xbox One',
+             'Nintendo Switch','Nintendo Switch 2','Steam Deck',
+             'iOS','Android','Arcade','기타'],
+      movie: ['극장','Netflix','Disney+','Apple TV+','Amazon Prime',
+              'Watcha','티빙 (TVING)','웨이브 (Wavve)','쿠팡플레이',
+              'YouTube','Blu-ray / DVD','기타'],
+      anime: ['라프텔 (Laftel)','Netflix','Crunchyroll','디즈니+','아마존 프라임',
+              '티빙 (TVING)','웨이브 (Wavve)','TV 방영','극장판','OVA','기타'],
+    };
+    const STATUS_LABELS = {
+      game:  { cleared: '클리어',    playing: '플레이 중', planned: '플레이 예정' },
+      movie: { cleared: '시청 완료', playing: '시청 중',   planned: '시청 예정' },
+      anime: { cleared: '완주',      playing: '시청 중',   planned: '시청 예정' },
+    };
+
+    // TMDB 영화 장르 ID → 한국어 매핑 (search 응답은 genre_ids만 반환)
+    const TMDB_GENRES_KO = {
+      28: '액션', 12: '어드벤처', 16: '애니메이션', 35: '코미디', 80: '범죄',
+      99: '다큐멘터리', 18: '드라마', 10751: '가족', 14: '판타지', 36: '역사',
+      27: '공포', 10402: '음악', 9648: '미스터리', 10749: '로맨스',
+      878: 'SF', 10770: 'TV영화', 53: '스릴러', 10752: '전쟁', 37: '서부',
+    };
+
+    let currentCategory = localStorage.getItem(KEYS.category) || 'game';
 
     // === Localization ===
     // RAWG 장르 라벨은 종류가 한정적이라 정적 사전으로 즉시 변환
@@ -804,7 +870,9 @@
     function loadGames(profile) {
       if (!profile) return [];
       const raw = localStorage.getItem(KEYS.data(profile));
-      return raw ? JSON.parse(raw) : [];
+      const items = raw ? JSON.parse(raw) : [];
+      // 카테고리 필드 없는 레거시 데이터는 'game'으로 간주
+      return items.map((g) => ({ ...g, category: g.category || 'game' }));
     }
 
     function saveGames() {
@@ -827,8 +895,12 @@
       }[c]));
     }
 
-    function statusLabel(s) {
-      return { cleared: '클리어', playing: '플레이 중', planned: '플레이 예정' }[s] || s;
+    function statusLabel(s, cat) {
+      return (STATUS_LABELS[cat || currentCategory] || STATUS_LABELS.game)[s] || s;
+    }
+
+    function stripHtml(s) {
+      return s ? String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '';
     }
 
     // === Profiles ===
@@ -919,6 +991,116 @@
       }
     }
 
+    // === TMDB (movies) ===
+    async function tmdbSearch(query) {
+      const key = getTmdbKey();
+      if (!key) return [];
+      const url = `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(query)}&language=ko-KR&page=1&include_adult=false`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`TMDB ${res.status}`);
+        const json = await res.json();
+        return json.results || [];
+      } catch (err) {
+        console.warn('TMDB 조회 실패:', err.message);
+        return [];
+      }
+    }
+    async function tmdbDetail(id) {
+      const key = getTmdbKey();
+      if (!key) return null;
+      try {
+        const res = await fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${encodeURIComponent(key)}&language=ko-KR`);
+        if (!res.ok) throw new Error(`TMDB ${res.status}`);
+        return await res.json();
+      } catch { return null; }
+    }
+
+    // === Jikan (MyAnimeList — anime) ===
+    async function jikanSearch(query) {
+      const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=20&order_by=popularity`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Jikan ${res.status}`);
+        const json = await res.json();
+        return json.data || [];
+      } catch (err) {
+        console.warn('Jikan 조회 실패:', err.message);
+        return [];
+      }
+    }
+    async function jikanDetail(id) {
+      try {
+        const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
+        if (!res.ok) throw new Error(`Jikan ${res.status}`);
+        const json = await res.json();
+        return json.data || null;
+      } catch { return null; }
+    }
+
+    // === 카테고리별 결과 → 통일된 형태로 정규화 ===
+    function normalizeItem(raw) {
+      if (currentCategory === 'game') {
+        return {
+          _id: raw.id, _raw: raw, _needsTranslation: true,
+          title: raw.name || '',
+          released: raw.released || '',
+          genres: (raw.genres || []).map((g) => translateGenre(g.name || g)),
+          description: raw.description_raw || stripHtml(raw.description) || '',
+          background_image: raw.background_image || '',
+        };
+      }
+      if (currentCategory === 'movie') {
+        const cover = raw.poster_path ? `https://image.tmdb.org/t/p/w500${raw.poster_path}`
+                    : raw.backdrop_path ? `https://image.tmdb.org/t/p/w780${raw.backdrop_path}` : '';
+        const genres = raw.genres ? raw.genres.map((g) => g.name)
+                     : (raw.genre_ids || []).map((id) => TMDB_GENRES_KO[id]).filter(Boolean);
+        return {
+          _id: raw.id, _raw: raw, _needsTranslation: false,
+          title: raw.title || raw.original_title || '',
+          released: raw.release_date || '',
+          genres,
+          description: raw.overview || '',
+          background_image: cover,
+        };
+      }
+      if (currentCategory === 'anime') {
+        const cover = (raw.images && raw.images.jpg && (raw.images.jpg.large_image_url || raw.images.jpg.image_url)) || '';
+        return {
+          _id: raw.mal_id, _raw: raw, _needsTranslation: true,
+          title: raw.title || '',
+          released: (raw.aired && raw.aired.from) ? raw.aired.from.slice(0, 10) : '',
+          genres: (raw.genres || []).map((g) => translateGenre(g.name)),
+          description: raw.synopsis || '',
+          background_image: cover,
+        };
+      }
+      return { _raw: raw, title: '', genres: [], description: '', background_image: '', released: '' };
+    }
+
+    // 검색: 카테고리에 맞는 API 호출 + 정규화. 한글 쿼리는 RAWG/Jikan에 한해 영문 변환.
+    async function searchByCategory(query) {
+      let raw = [];
+      if (currentCategory === 'game') {
+        const q = await toEnglish(query);
+        raw = (await rawgSearch(q)) || [];
+      } else if (currentCategory === 'movie') {
+        // TMDB는 한국어 쿼리·응답을 native 지원
+        raw = await tmdbSearch(query);
+      } else if (currentCategory === 'anime') {
+        const q = await toEnglish(query);
+        raw = await jikanSearch(q);
+      }
+      return raw.map(normalizeItem);
+    }
+
+    async function detailByCategory(item) {
+      if (currentCategory === 'game') return normalizeItem((await rawgDetail(item._id)) || item._raw);
+      if (currentCategory === 'movie') return normalizeItem((await tmdbDetail(item._id)) || item._raw);
+      if (currentCategory === 'anime') return normalizeItem((await jikanDetail(item._id)) || item._raw);
+      return item;
+    }
+
     function renderLookupResults(results) {
       const box = $('lookupResults');
       box.innerHTML = '';
@@ -929,17 +1111,17 @@
       results.forEach((r) => {
         const div = document.createElement('div');
         div.className = 'lookup-result';
-        const genres = translateGenres(r.genres).join(', ');
+        const genres = (r.genres || []).join(', ');
         div.innerHTML = `
           <img src="${r.background_image || ''}" alt="" onerror="this.style.opacity=0.2" />
           <div style="flex:1; min-width:0">
-            <strong>${escapeHtml(r.name)}</strong>
+            <strong>${escapeHtml(r.title)}</strong>
             <div class="meta">${escapeHtml(r.released || '')} · ${escapeHtml(genres)}</div>
           </div>
         `;
         div.addEventListener('click', async () => {
           box.innerHTML = '<div class="muted" style="padding:6px">상세 정보 불러오는 중...</div>';
-          const detail = await rawgDetail(r.id);
+          const detail = await detailByCategory(r);
           await applyLookupToForm(detail || r);
           box.innerHTML = '';
         });
@@ -947,21 +1129,21 @@
       });
     }
 
-    async function applyLookupToForm(game) {
-      $('title').value = game.name || $('title').value;
-      $('genres').value = translateGenres(game.genres).join(', ');
-      $('released').value = game.released || '';
-      $('coverImage').value = game.background_image || '';
+    async function applyLookupToForm(item) {
+      $('title').value = item.title || $('title').value;
+      $('genres').value = (item.genres || []).join(', ');
+      $('released').value = item.released || '';
+      $('coverImage').value = item.background_image || '';
 
-      const rawDesc = game.description_raw || game.description || '';
-      const truncated = rawDesc.length > 600 ? rawDesc.slice(0, 600) + '…' : rawDesc;
-      if (!truncated) {
-        $('description').value = '';
-        return;
+      const desc = item.description || '';
+      const truncated = desc.length > 600 ? desc.slice(0, 600) + '…' : desc;
+      if (!truncated) { $('description').value = ''; return; }
+      if (item._needsTranslation) {
+        $('description').value = '번역 중...';
+        $('description').value = await translateToKorean(truncated);
+      } else {
+        $('description').value = truncated;
       }
-      $('description').value = '번역 중...';
-      const ko = await translateToKorean(truncated);
-      $('description').value = ko;
     }
 
     // === Screenshots ===
@@ -1008,6 +1190,7 @@
       const genres = $('genres').value.split(',').map((g) => g.trim()).filter(Boolean);
       return {
         id,
+        category: currentCategory,
         title,
         status: $('status').value,
         platform: $('platform').value,
@@ -1105,6 +1288,7 @@
       const fp = $('filterPlatform').value;
       const fg = $('filterGenre').value;
       return state.games.filter((g) => {
+        if ((g.category || 'game') !== currentCategory) return false;
         if (fs !== 'all' && g.status !== fs) return false;
         if (fp !== 'all' && g.platform !== fp) return false;
         if (fg !== 'all' && !(g.genres || []).includes(fg)) return false;
@@ -1262,6 +1446,51 @@
       renderList();
     }
 
+    function applyCategoryUI() {
+      const c = CATEGORIES[currentCategory];
+
+      document.querySelectorAll('.category-tabs button').forEach((b) => {
+        b.classList.toggle('active', b.dataset.cat === currentCategory);
+      });
+
+      $('formTitle').textContent = c.formTitle;
+      $('titleLabel').textContent = c.titleLabel + ' *';
+      $('platformLabel').textContent = c.platformLabel + ' *';
+      $('releasedLabel').textContent = c.releasedLabel;
+      $('title').placeholder = c.placeholder;
+
+      // 상태 select 옵션 재구성
+      const statusSel = $('status');
+      const prevStatus = statusSel.value || 'planned';
+      statusSel.innerHTML = ['planned', 'playing', 'cleared']
+        .map((s) => `<option value="${s}">${statusLabel(s)}</option>`).join('');
+      statusSel.value = prevStatus;
+
+      // 필터 상태 select 재구성
+      const fs = $('filterStatus');
+      const prevFs = fs.value || 'all';
+      fs.innerHTML = '<option value="all">전체 상태</option>' +
+        ['cleared', 'playing', 'planned']
+          .map((s) => `<option value="${s}">${statusLabel(s)}</option>`).join('');
+      fs.value = prevFs;
+
+      // 플랫폼 select 재구성
+      const platSel = $('platform');
+      const prevPlat = platSel.value;
+      platSel.innerHTML = '<option value="">선택하세요</option>' +
+        PLATFORMS[currentCategory].map((p) => `<option>${p}</option>`).join('');
+      if (PLATFORMS[currentCategory].includes(prevPlat)) platSel.value = prevPlat;
+    }
+
+    function setCategory(cat) {
+      if (!CATEGORIES[cat]) return;
+      currentCategory = cat;
+      localStorage.setItem(KEYS.category, cat);
+      applyCategoryUI();
+      resetForm();
+      renderAll();
+    }
+
     function renderGenreFilter() {
       const sel = $('filterGenre');
       const current = sel.value || 'all';
@@ -1294,6 +1523,8 @@
       const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
       const img = (src, w) => src ? `<img src="${src}" width="${w}" />` : '';
 
+      const CAT_LABEL = { game: '🎮 게임', movie: '🎬 영화', anime: '📺 애니메이션' };
+
       const rowsHtml = games.map((g) => {
         const bg = ROW_BG[g.status] || '#FFFFFF';
         const fg = STATUS_FG[g.status] || '#222';
@@ -1303,10 +1534,12 @@
         const created = g.createdAt ? new Date(g.createdAt).toLocaleDateString('ko-KR') : '';
         const desc = esc(g.description || '').replace(/\n/g, '<br>');
         const note = esc(g.note || '').replace(/\n/g, '<br>');
+        const cat = g.category || 'game';
         return `
           <tr style="background-color:${bg}">
+            <td>${esc(CAT_LABEL[cat] || cat)}</td>
             <td style="font-weight:bold">${esc(g.title)}</td>
-            <td style="color:${fg}; font-weight:bold">${esc(statusLabel(g.status))}</td>
+            <td style="color:${fg}; font-weight:bold">${esc(statusLabel(g.status, cat))}</td>
             <td>${esc(g.platform || '')}</td>
             <td>${esc((g.genres || []).join(', '))}</td>
             <td>${esc(g.released || '')}</td>
@@ -1338,7 +1571,7 @@
 '</style></head><body>' +
 '<table>' +
 '<thead><tr>' +
-'<th>게임명</th><th>상태</th><th>플랫폼</th><th>장르</th>' +
+'<th>분류</th><th>제목</th><th>상태</th><th>플랫폼</th><th>장르</th>' +
 '<th>발매일</th><th>설명</th><th>메모</th>' +
 '<th>커버</th><th>스크린샷 수</th><th>스크린샷</th><th>등록일</th>' +
 '</tr></thead>' +
@@ -1398,7 +1631,10 @@
       // Settings panel
       const rawgKeyInput = $('rawgKey');
       rawgKeyInput.value = localStorage.getItem(KEYS.rawgKey) || '';
+      const tmdbKeyInput = $('tmdbKey');
+      tmdbKeyInput.value = localStorage.getItem(KEYS.tmdbKey) || '';
       updateRawgKeyStatus();
+      updateTmdbKeyStatus();
       $('settingsBtn').addEventListener('click', () => {
         $('settingsPanel').classList.toggle('hidden');
       });
@@ -1408,8 +1644,20 @@
         else localStorage.removeItem(KEYS.rawgKey);
         updateRawgKeyStatus();
       });
+      $('saveTmdbKey').addEventListener('click', () => {
+        const v = tmdbKeyInput.value.trim();
+        if (v) localStorage.setItem(KEYS.tmdbKey, v);
+        else localStorage.removeItem(KEYS.tmdbKey);
+        updateTmdbKeyStatus();
+      });
 
-      // Auto-search: 게임명 입력 시 RAWG와 실시간 싱크 (debounce + 한글 자동 번역)
+      // Category tabs
+      document.querySelectorAll('.category-tabs button').forEach((b) => {
+        b.addEventListener('click', () => setCategory(b.dataset.cat));
+      });
+      applyCategoryUI();
+
+      // Auto-search: 제목 입력 시 카테고리별 DB와 실시간 싱크 (debounce)
       let searchSeq = 0;
       let debounceTimer = null;
       const titleInput = $('title');
@@ -1420,10 +1668,12 @@
         const q = raw.trim();
         if (q.length < 2) { resultsBox.innerHTML = ''; return; }
         resultsBox.innerHTML = '<div class="muted" style="padding:6px">검색 중...</div>';
-        const engQuery = await toEnglish(q);
+        const results = await searchByCategory(q);
         if (seq !== searchSeq) return;                  // 사용자가 이미 더 입력함 — 폐기
-        const results = await rawgSearch(engQuery);
-        if (seq !== searchSeq) return;
+        if (currentCategory === 'movie' && !getTmdbKey()) {
+          resultsBox.innerHTML = '<div class="muted" style="padding:6px">⚠️ 영화 자동 검색에는 TMDB 키가 필요해요. 설정 패널에서 입력하거나 직접 입력하세요.</div>';
+          return;
+        }
         renderLookupResults(results || []);
       };
 
@@ -1480,8 +1730,14 @@
     function updateRawgKeyStatus() {
       const userKey = localStorage.getItem(KEYS.rawgKey);
       $('rawgKeyStatus').textContent = userKey
-        ? '✅ 본인 RAWG 키 사용 중. "정보 불러오기"로 자동 채움이 가능합니다.'
-        : '🔹 기본 내장 키 사용 중. 본인 키를 입력하면 그쪽이 우선 사용됩니다.';
+        ? '✅ 본인 RAWG 키 사용 중.'
+        : '🔹 기본 내장 키 사용 중. 본인 키를 입력하면 우선 사용.';
+    }
+    function updateTmdbKeyStatus() {
+      const userKey = localStorage.getItem(KEYS.tmdbKey);
+      $('tmdbKeyStatus').textContent = userKey
+        ? '✅ TMDB 키가 저장되었습니다. 영화 자동 채움 가능.'
+        : '🔸 TMDB 키 없음. 영화 항목은 모든 정보 수동 입력.';
     }
 
     document.addEventListener('DOMContentLoaded', init);
