@@ -806,6 +806,66 @@
       font-size: 13px;
       min-height: 18px;
     }
+
+    /* === Help modal === */
+    .help-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .help-card {
+      width: 100%;
+      max-width: 640px;
+      max-height: calc(100vh - 48px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .help-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .help-header h2 { margin: 0; font-size: 18px; }
+    .help-header button {
+      padding: 4px 10px;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .help-body {
+      padding: 8px 22px 22px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .help-body section { margin-top: 16px; }
+    .help-body h3 {
+      margin: 12px 0 6px;
+      font-size: 14px;
+      color: var(--accent);
+    }
+    .help-body ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .help-body li {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+    }
+    .help-body b { color: var(--text); }
   </style>
 </head>
 <body>
@@ -857,9 +917,64 @@
       <button id="renameProfileBtn" type="button" class="ghost" title="프로필 이름 변경">✎</button>
       <button id="pinBtn" type="button" class="ghost" title="비밀번호 설정">🔒</button>
       <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
+      <button id="helpBtn" type="button" class="ghost" title="사용 방법">?</button>
       <button id="themeBtn" type="button" class="ghost" title="테마 전환">🌙</button>
     </div>
   </header>
+
+  <div id="helpModal" class="help-modal hidden" aria-hidden="true">
+    <div class="help-card" role="dialog" aria-labelledby="helpTitle">
+      <div class="help-header">
+        <h2 id="helpTitle">📁 Archive Zero 사용 방법</h2>
+        <button type="button" id="helpCloseBtn" class="ghost" aria-label="닫기">✕</button>
+      </div>
+      <div class="help-body">
+        <section>
+          <h3>1. 시작하기</h3>
+          <ul>
+            <li>앱 시작 시 잠금화면에서 프로필을 선택하고 4자리 비밀번호를 입력하세요.</li>
+            <li>처음이라면 <b>＋ 새 프로필 만들기</b>로 이름과 4자리 비밀번호를 정해 만드세요.</li>
+            <li>같은 프로필 이름과 비밀번호로 다른 기기에서도 그대로 진입할 수 있습니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>2. 항목 추가</h3>
+          <ul>
+            <li>상단의 <b>🎮 게임</b> / <b>🎬 영상</b> 탭에서 카테고리를 고르세요.</li>
+            <li>제목 입력란에 두 글자 이상 입력하면 자동으로 검색됩니다 (게임: RAWG, 영상: TMDB).</li>
+            <li>검색 결과를 클릭하면 장르·발매일·설명·이미지가 자동으로 채워집니다.</li>
+            <li>상태와 플랫폼/매체를 고르고 <b>추가</b>를 누르면 라이브러리에 저장됩니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>3. 라이브러리</h3>
+          <ul>
+            <li>오른쪽 <b>🃏 카드</b> / <b>📋 목록</b> 뷰를 자유롭게 전환할 수 있습니다.</li>
+            <li>검색창과 상태/플랫폼/장르 필터로 빠르게 추려볼 수 있습니다.</li>
+            <li><b>📥 엑셀 내보내기</b>로 전체 데이터를 파일로 받을 수 있습니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>4. 프로필 관리 (헤더 버튼)</h3>
+          <ul>
+            <li><b>＋ 새 프로필</b>: 새 프로필을 만듭니다. 비밀번호 필수.</li>
+            <li><b>✎</b>: 현재 프로필의 이름을 변경합니다.</li>
+            <li><b>🔒</b>: 현재 프로필의 비밀번호를 변경합니다.</li>
+            <li><b>프로필 삭제</b>: 현재 프로필과 모든 데이터를 영구 삭제합니다.</li>
+            <li><b>🌙 / ☀️</b>: 다크/라이트 테마를 전환합니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>5. 동기화</h3>
+          <ul>
+            <li>모든 데이터는 클라우드에 자동 저장됩니다 — 별도 설정 필요 없음.</li>
+            <li>같은 프로필 이름 + 비밀번호로 다른 기기에서 진입하면 동일한 라이브러리가 보입니다.</li>
+            <li>항목 추가/수정/삭제 시 잠시 후 자동으로 클라우드에 반영됩니다.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <nav class="category-tabs" id="categoryTabs" role="tablist">
     <button type="button" data-cat="game" class="active">🎮 게임</button>
@@ -962,7 +1077,6 @@
   </main>
 
   <footer>
-    <p class="muted">데이터는 이 브라우저에 저장됩니다 (LocalStorage). 프로필별로 분리되어 있어요.</p>
   </footer>
 
   <script>
@@ -2640,6 +2754,25 @@
       $('themeBtn').addEventListener('click', () => {
         const current = document.documentElement.getAttribute('data-theme') || 'dark';
         applyTheme(current === 'dark' ? 'light' : 'dark');
+      });
+
+      // Help modal
+      const helpModal = $('helpModal');
+      const openHelp = () => {
+        helpModal.classList.remove('hidden');
+        helpModal.setAttribute('aria-hidden', 'false');
+      };
+      const closeHelp = () => {
+        helpModal.classList.add('hidden');
+        helpModal.setAttribute('aria-hidden', 'true');
+      };
+      $('helpBtn').addEventListener('click', openHelp);
+      $('helpCloseBtn').addEventListener('click', closeHelp);
+      helpModal.addEventListener('click', (e) => {
+        if (e.target === helpModal) closeHelp(); // 바깥 클릭 시 닫기
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !helpModal.classList.contains('hidden')) closeHelp();
       });
 
 
