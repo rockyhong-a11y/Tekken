@@ -1259,21 +1259,36 @@
       return true;
     }
 
-    // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영
+    // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영. PIN 필드만 조회해
+    // 게임 데이터까지 전송받는 일을 피한다.
     async function fetchCloudPin(name) {
       const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
       if (!base) return getProfilePin(name);
       try {
-        const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}.json`, { cache: 'no-store' });
+        const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}/pin.json`, { cache: 'no-store' });
         if (res.ok) {
-          const data = await res.json();
-          if (data && typeof data.pin === 'string' && data.pin) {
-            setProfilePin(name, data.pin);
-            return data.pin;
+          const pin = await res.json();
+          if (typeof pin === 'string' && pin) {
+            setProfilePin(name, pin);
+            return pin;
           }
         }
       } catch {}
       return getProfilePin(name);
+    }
+
+    // PIN 필드만 부분 갱신 (PATCH) — games 등 다른 필드에는 영향이 없다.
+    async function pushPinToCloud(name, pin) {
+      const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
+      if (!base || !name) return false;
+      try {
+        const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pin || '' }),
+        });
+        return res.ok;
+      } catch { return false; }
     }
 
     async function switchProfile(name, opts) {
@@ -1360,8 +1375,9 @@
       }
       setProfilePin(state.currentProfile, next);
       state._pinUnlocked = next; // 변경 후 재입력 안 받게
-      // 클라우드에도 즉시 반영
-      if (getFirebaseUrl()) pushToCloud();
+      // 클라우드에도 즉시 반영 (PIN 필드만 PATCH로 갱신해 games 등 다른
+      // 필드에 영향 주지 않음)
+      if (getFirebaseUrl()) pushPinToCloud(state.currentProfile, next);
       alert('비밀번호가 변경되었습니다.');
     }
 
@@ -2463,20 +2479,30 @@
       });
     }
 
-    function openPinView(name) {
+    async function openPinView(name) {
       lockSelectedProfile = name;
       $('lockPinName').textContent = name;
-      const hasPin = !!getProfilePin(name);
-      $('lockPinHint').textContent = hasPin
-        ? '4자리 비밀번호를 입력하세요'
-        : '비밀번호가 설정되어 있지 않습니다. 새로 설정해주세요.';
-      $('lockEnterBtn').textContent = hasPin ? '잠금 해제' : '비밀번호 설정 후 시작';
       $('lockProfileView').classList.add('hidden');
       $('lockCreateView').classList.add('hidden');
       $('lockPinView').classList.remove('hidden');
       $('lockPinInput').value = '';
       $('lockError').textContent = '';
+      // 클라우드에서 PIN을 받기 전 우선 로컬 캐시 기준으로 안내
+      const localHas = !!getProfilePin(name);
+      $('lockPinHint').textContent = localHas
+        ? '4자리 비밀번호를 입력하세요'
+        : '확인 중...';
+      $('lockEnterBtn').textContent = '잠금 해제';
       setTimeout(() => $('lockPinInput').focus(), 0);
+      // 클라우드에서 최신 상태를 조회해 안내 메시지를 보정 (다른 기기에서
+      // 만든 프로필이면 로컬엔 PIN이 없지만 클라우드엔 있다)
+      const cloudPin = await fetchCloudPin(name);
+      if (lockSelectedProfile !== name) return; // 그새 다른 프로필 선택됨
+      const hasPin = !!cloudPin;
+      $('lockPinHint').textContent = hasPin
+        ? '4자리 비밀번호를 입력하세요'
+        : '비밀번호가 설정되어 있지 않습니다. 새로 설정해주세요.';
+      $('lockEnterBtn').textContent = hasPin ? '잠금 해제' : '비밀번호 설정 후 시작';
     }
 
     async function submitLockPin() {
@@ -2497,9 +2523,13 @@
         }
         state._pinUnlocked = existing;
       } else {
-        // PIN 미설정 프로필 마이그레이션: 입력한 4자리를 PIN으로 설정
+        // PIN 미설정 프로필 마이그레이션: 입력한 4자리를 PIN으로 설정하고
+        // 클라우드에도 즉시 반영 (다른 기기에서도 사용할 수 있게)
         setProfilePin(name, entered);
         state._pinUnlocked = entered;
+        if (getFirebaseUrl && getFirebaseUrl()) {
+          await pushPinToCloud(name, entered);
+        }
       }
       await switchProfile(name, { skipPinCheck: true });
       hideLockScreen();
