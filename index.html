@@ -1245,27 +1245,18 @@
       return null;
     }
 
-    // 클라우드와 로컬의 프로필 목록을 합집합으로 동기화. 새로 추가된 항목이
-    // 있으면 잠금화면/드롭다운을 다시 그린다.
+    // 클라우드의 프로필 목록을 단일 진실의 원천(SSOT)으로 사용해 로컬 목록을 교체.
+    // 클라우드가 비어 있으면 로컬도 비우고, 네트워크 오류면 로컬을 유지한다.
     async function syncProfileListFromCloud() {
       const names = await fetchCloudProfileNames();
-      if (!names || !names.length) return false;
-      let changed = false;
-      for (const n of names) {
-        if (!state.profiles.includes(n)) {
-          state.profiles.push(n);
-          changed = true;
-        }
+      if (names === null) return false; // 클라우드 도달 실패 — 로컬 유지
+      state.profiles = names;
+      saveProfiles(state.profiles);
+      refreshProfileSelect();
+      if (!$('lockScreen').classList.contains('hidden')) {
+        renderLockProfiles();
       }
-      if (changed) {
-        saveProfiles(state.profiles);
-        refreshProfileSelect();
-        // 잠금화면이 표시 중이면 즉시 반영
-        if (!$('lockScreen').classList.contains('hidden')) {
-          renderLockProfiles();
-        }
-      }
-      return changed;
+      return true;
     }
 
     // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영
@@ -2536,9 +2527,10 @@
     }
 
     function init() {
-      state.profiles = loadProfiles();
-      // 레거시 데이터: 이전 버전에서는 PIN 없이 프로필이 만들어질 수 있었으나
-      // 새 정책에서는 비밀번호가 필수. 잠금화면에서 사용자에게 신규 PIN을 받음.
+      // 프로필 목록은 클라우드를 단일 진실의 원천으로 사용한다. 클라우드 URL이
+      // 설정되어 있으면 잠금화면에서 클라우드를 받아 로컬을 갱신하므로,
+      // 여기서는 빈 상태로 시작해 레거시 "기본 프로필" 같은 잔존 항목을 자동 정리.
+      state.profiles = getFirebaseUrl() ? [] : loadProfiles();
 
       refreshProfileSelect();
 
