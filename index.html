@@ -1273,6 +1273,7 @@
       localStorage.setItem(KEYS.currentProfile, name);
       state.games = loadGames(name);
       state._localUpdatedAt = Number(localStorage.getItem(KEYS.localUpdatedAt(name))) || 0;
+      refreshProfileSelect();
       renderAll();
       if (!skipPull && getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
     }
