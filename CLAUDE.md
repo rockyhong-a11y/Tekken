@@ -7,7 +7,7 @@
 | 카테고리 | DB | 키 필요 |
 |---|---|---|
 | 🎮 게임 | [RAWG](https://rawg.io/apidocs) | 내장 기본키 (사용자 키 우선) |
-| 🎬 영화 | [TMDB](https://www.themoviedb.org/) | 사용자 발급 필요 |
+| 🎬 영화 | [TMDB](https://www.themoviedb.org/) | 내장 기본키 |
 | 📺 애니메이션 | [Jikan (MyAnimeList)](https://docs.api.jikan.moe/) | 불필요 |
 
 ## Stack
