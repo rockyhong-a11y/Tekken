@@ -691,9 +691,160 @@
       border-radius: 8px;
       box-shadow: var(--shadow);
     }
+
+    /* === Profile lock screen === */
+    .lock-screen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(160deg, var(--topbar-grad-top) 0%, var(--bg) 100%);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .lock-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 32px 28px;
+    }
+    .lock-card h1 {
+      margin: 0 0 4px;
+      font-size: 26px;
+      text-align: center;
+    }
+    .lock-subtitle {
+      margin: 0 0 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .lock-profile-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .lock-profile {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 15px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .lock-profile:hover {
+      background: var(--border);
+      border-color: var(--accent);
+    }
+    .lock-profile .lock-profile-meta {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .lock-empty {
+      padding: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+    }
+    .lock-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      margin-top: 16px;
+    }
+    .lock-actions button { flex: 1; }
+    .lock-pin-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .lock-pin-name {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .lock-pin-hint {
+      margin: 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .lock-pin-input {
+      width: 100%;
+      padding: 14px;
+      font-size: 22px;
+      text-align: center;
+      letter-spacing: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+    }
+    .lock-pin-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .lock-error {
+      margin: 0;
+      color: #ef4444;
+      text-align: center;
+      font-size: 13px;
+      min-height: 18px;
+    }
   </style>
 </head>
 <body>
+  <div id="lockScreen" class="lock-screen hidden" aria-hidden="true">
+    <div class="lock-card">
+      <h1>🎬 Life Tracker</h1>
+      <p class="lock-subtitle" id="lockSubtitle">프로필을 선택하고 비밀번호를 입력하세요</p>
+
+      <div id="lockProfileView">
+        <div id="lockProfileList" class="lock-profile-list"></div>
+        <div class="lock-actions">
+          <button type="button" id="lockNewProfileBtn">＋ 새 프로필 만들기</button>
+        </div>
+      </div>
+
+      <div id="lockPinView" class="lock-pin-section hidden">
+        <p class="lock-pin-name" id="lockPinName"></p>
+        <p class="lock-pin-hint" id="lockPinHint">4자리 비밀번호를 입력하세요</p>
+        <input type="password" id="lockPinInput" class="lock-pin-input" maxlength="4" inputmode="numeric" autocomplete="off" />
+        <p id="lockError" class="lock-error"></p>
+        <div class="lock-actions">
+          <button type="button" id="lockBackBtn" class="ghost">← 뒤로</button>
+          <button type="button" id="lockEnterBtn">잠금 해제</button>
+        </div>
+      </div>
+
+      <div id="lockCreateView" class="lock-pin-section hidden">
+        <p class="lock-pin-hint">새 프로필 이름과 4자리 비밀번호를 입력하세요</p>
+        <input type="text" id="lockCreateName" class="lock-pin-input" style="font-size:16px;letter-spacing:normal;text-align:left" placeholder="프로필 이름" autocomplete="off" />
+        <input type="password" id="lockCreatePin" class="lock-pin-input" maxlength="4" inputmode="numeric" placeholder="4자리 비밀번호" autocomplete="off" />
+        <p id="lockCreateError" class="lock-error"></p>
+        <div class="lock-actions">
+          <button type="button" id="lockCreateCancelBtn" class="ghost">← 취소</button>
+          <button type="button" id="lockCreateConfirmBtn">만들기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <header class="topbar">
     <div class="brand">
       <h1>🎬 Life Tracker</h1>
@@ -856,6 +1007,7 @@
       firebaseUrl: 'gametracker:firebaseUrl',
       data: (profile) => `gametracker:profile:${profile}`,
       pin: (profile) => `gametracker:pin:${profile}`,
+      localUpdatedAt: (profile) => `gametracker:localUpdatedAt:${profile}`,
     };
 
     // === Profile PIN (4-digit) ===
@@ -995,6 +1147,9 @@
       games: [],
       screenshotsBuffer: [],
       lastLookup: null,     // 직전 검색결과 클릭 시의 메타데이터 (cast/director/trailer 등)
+      _pinUnlocked: null,   // 세션 동안 잠금 해제된 PIN
+      _suppressPull: false, // 새 프로필 직후 의도치 않은 클라우드 데이터 유입 차단
+      _pendingPush: null,   // 디바운스된 push가 미처리 상태일 때 resolve를 보관
     };
 
     // === Utilities ===
@@ -1024,6 +1179,10 @@
     function saveGames() {
       if (!state.currentProfile) return;
       localStorage.setItem(KEYS.data(state.currentProfile), JSON.stringify(state.games));
+      // 로컬 변경 시각 기록 — 클라우드와의 충돌 해결에 사용
+      const now = Date.now();
+      state._localUpdatedAt = now;
+      localStorage.setItem(KEYS.localUpdatedAt(state.currentProfile), String(now));
       // Firebase URL이 설정되어 있으면 자동으로 클라우드에도 푸시
       if (typeof cloudSyncDebounced === 'function') cloudSyncDebounced();
     }
@@ -1067,62 +1226,88 @@
       });
     }
 
-    async function switchProfile(name) {
-      // 클라우드에서 최신 PIN을 가져와 확인 (URL 설정된 경우)
-      let pin = getProfilePin(name);
-      if (getFirebaseUrl && getFirebaseUrl()) {
-        try {
-          const base = getFirebaseUrl();
-          const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}.json`, { cache: 'no-store' });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && typeof data.pin === 'string') {
-              pin = data.pin;
-              setProfilePin(name, pin);
-            }
+    // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영
+    async function fetchCloudPin(name) {
+      const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
+      if (!base) return getProfilePin(name);
+      try {
+        const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}.json`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.pin === 'string' && data.pin) {
+            setProfilePin(name, data.pin);
+            return data.pin;
           }
-        } catch {}
-      }
+        }
+      } catch {}
+      return getProfilePin(name);
+    }
 
-      // PIN 잠금 검증
-      if (pin && pin !== state._pinUnlocked) {
-        const entered = prompt(`🔒 "${name}" 프로필 비밀번호 (4자리):`);
-        if (entered !== pin) {
-          if (entered !== null) alert('비밀번호가 일치하지 않습니다.');
-          // select를 현재 프로필로 되돌림
-          if (state.currentProfile) {
-            $('profileSelect').value = state.currentProfile;
-          }
+    async function switchProfile(name, opts) {
+      opts = opts || {};
+      const skipPinCheck = !!opts.skipPinCheck;
+      const skipPull = !!opts.skipPull;
+
+      if (!skipPinCheck) {
+        const pin = await fetchCloudPin(name);
+        if (!pin) {
+          alert(`"${name}" 프로필에 비밀번호가 설정되어 있지 않습니다. 잠금화면에서 다시 설정해주세요.`);
+          showLockScreen();
           return;
         }
-        state._pinUnlocked = pin;
+        if (pin !== state._pinUnlocked) {
+          const entered = prompt(`🔒 "${name}" 프로필 비밀번호 (4자리):`);
+          if (entered !== pin) {
+            if (entered !== null) alert('비밀번호가 일치하지 않습니다.');
+            if (state.currentProfile) {
+              $('profileSelect').value = state.currentProfile;
+            }
+            return;
+          }
+          state._pinUnlocked = pin;
+        }
       }
 
       state.currentProfile = name;
       localStorage.setItem(KEYS.currentProfile, name);
       state.games = loadGames(name);
+      state._localUpdatedAt = Number(localStorage.getItem(KEYS.localUpdatedAt(name))) || 0;
       renderAll();
-      if (getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
+      if (!skipPull && getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
     }
 
-    function createProfile(name) {
+    function createProfile(name, pin) {
       name = (name || '').trim();
-      if (!name) return;
+      if (!name) { alert('프로필 이름을 입력해주세요.'); return false; }
       if (state.profiles.includes(name)) {
         alert('이미 존재하는 프로필 이름입니다.');
-        return;
+        return false;
       }
-      const pin = prompt('4자리 비밀번호 (선택, 잠그지 않으려면 비워두고 확인):');
-      if (pin === null) return; // 취소
-      if (pin && !/^\d{4}$/.test(pin)) {
-        alert('비밀번호는 4자리 숫자만 가능합니다.');
-        return;
+      if (!pin || !/^\d{4}$/.test(pin)) {
+        alert('비밀번호는 4자리 숫자여야 합니다.');
+        return false;
       }
       setProfilePin(name, pin);
       state.profiles.push(name);
       saveProfiles(state.profiles);
+      // 새 프로필은 항상 빈 상태에서 시작. 클라우드에 동일 이름의 잔존 데이터가
+      // 있을 수 있으므로, 빈 데이터를 먼저 푸시해서 초기화한 뒤 pull을 건너뛴다.
+      state._pinUnlocked = pin;
+      state.currentProfile = name;
+      localStorage.setItem(KEYS.currentProfile, name);
+      state.games = [];
+      localStorage.setItem(KEYS.data(name), JSON.stringify([]));
+      const now = Date.now();
+      state._localUpdatedAt = now;
+      localStorage.setItem(KEYS.localUpdatedAt(name), String(now));
       refreshProfileSelect();
-      switchProfile(name);
+      renderAll();
+      // 즉시 클라우드 초기화 (다른 사용자의 잔존 데이터를 덮어쓰지 않도록)
+      if (getFirebaseUrl && getFirebaseUrl()) {
+        state._suppressPull = true;
+        pushToCloud().finally(() => { state._suppressPull = false; });
+      }
+      return true;
     }
 
     function changeCurrentProfilePin() {
@@ -1133,33 +1318,42 @@
         if (cur === null) return;
         if (cur !== existing) { alert('비밀번호가 일치하지 않습니다.'); return; }
       }
-      const next = prompt('새 비밀번호 (4자리). 해제하려면 비워두고 확인:');
+      const next = prompt('새 비밀번호 (4자리):');
       if (next === null) return;
-      if (next && !/^\d{4}$/.test(next)) {
-        alert('4자리 숫자만 가능합니다.');
+      if (!/^\d{4}$/.test(next)) {
+        alert('비밀번호는 4자리 숫자여야 합니다.');
         return;
       }
       setProfilePin(state.currentProfile, next);
       state._pinUnlocked = next; // 변경 후 재입력 안 받게
       // 클라우드에도 즉시 반영
       if (getFirebaseUrl()) pushToCloud();
-      alert(next ? '비밀번호가 설정되었습니다.' : '비밀번호가 해제되었습니다.');
+      alert('비밀번호가 변경되었습니다.');
     }
 
-    function deleteCurrentProfile() {
+    async function deleteCurrentProfile() {
       if (!state.currentProfile) return;
       if (state.profiles.length <= 1) {
         alert('마지막 프로필은 삭제할 수 없습니다.');
         return;
       }
       if (!confirm(`프로필 "${state.currentProfile}" 와 모든 게임 데이터를 삭제할까요?`)) return;
-      localStorage.removeItem(KEYS.data(state.currentProfile));
-      localStorage.removeItem(KEYS.pin(state.currentProfile));
-      state.profiles = state.profiles.filter((p) => p !== state.currentProfile);
+      const removed = state.currentProfile;
+      localStorage.removeItem(KEYS.data(removed));
+      localStorage.removeItem(KEYS.pin(removed));
+      localStorage.removeItem(KEYS.localUpdatedAt(removed));
+      state.profiles = state.profiles.filter((p) => p !== removed);
       saveProfiles(state.profiles);
-      refreshProfileSelect();
+      // 클라우드에서도 해당 프로필 삭제
+      if (getFirebaseUrl && getFirebaseUrl()) {
+        try {
+          await fetch(`${getFirebaseUrl()}/profiles/${encodeURIComponent(removed)}.json`, { method: 'DELETE' });
+        } catch {}
+      }
       state._pinUnlocked = null;
-      switchProfile(state.profiles[0]);
+      state.currentProfile = null;
+      refreshProfileSelect();
+      showLockScreen();
     }
 
     // === RAWG lookup ===
@@ -2046,18 +2240,21 @@
     async function pushToCloud() {
       const base = getFirebaseUrl();
       if (!base || !state.currentProfile) return false;
-      const endpoint = `${base}/profiles/${encodeURIComponent(state.currentProfile)}.json`;
+      const profile = state.currentProfile;
+      const endpoint = `${base}/profiles/${encodeURIComponent(profile)}.json`;
+      const updatedAt = Date.now();
       try {
         const res = await fetch(endpoint, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            updatedAt: Date.now(),
-            pin: getProfilePin(state.currentProfile),
+            updatedAt,
+            pin: getProfilePin(profile),
             games: state.games,
           }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state._lastPushedAt = updatedAt;
         setSyncStatus('☁ 보냄 ' + new Date().toLocaleTimeString('ko-KR'));
         return true;
       } catch (err) {
@@ -2069,17 +2266,33 @@
     async function pullFromCloud() {
       const base = getFirebaseUrl();
       if (!base || !state.currentProfile) return false;
+      if (state._suppressPull) return false;
+      // 보류 중인 로컬 변경이 있으면 먼저 푸시해서 클라우드 데이터에 의해
+      // 덮어쓰여지는 일이 없도록 함 (삭제한 항목이 되살아나는 이슈 방지)
+      await flushPendingPush();
       const endpoint = `${base}/profiles/${encodeURIComponent(state.currentProfile)}.json`;
       try {
         const res = await fetch(endpoint, { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data && Array.isArray(data.games)) {
+          // 로컬이 더 최신이면 클라우드로 덮어쓴다 (삭제 등 로컬 변경 보존)
+          const cloudAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
+          const storedLocal = Number(localStorage.getItem(KEYS.localUpdatedAt(state.currentProfile))) || 0;
+          const localAt = Math.max(state._localUpdatedAt || 0, storedLocal);
+          if (localAt > cloudAt) {
+            await pushToCloud();
+            setSyncStatus('☁ 로컬 변경이 더 최신 — 클라우드를 갱신했습니다.');
+            return true;
+          }
           state.games = data.games.map((g) => {
             const c = g.category || 'game';
             return { ...g, category: c === 'anime' ? 'tv' : c };
           });
           localStorage.setItem(KEYS.data(state.currentProfile), JSON.stringify(state.games));
+          // 클라우드를 받은 시점에는 로컬도 그 시각에 맞춰진 것으로 본다
+          state._localUpdatedAt = cloudAt;
+          localStorage.setItem(KEYS.localUpdatedAt(state.currentProfile), String(cloudAt));
           if (typeof data.pin === 'string') setProfilePin(state.currentProfile, data.pin);
           renderAll();
           setSyncStatus('☁ 가져옴 ' + new Date().toLocaleTimeString('ko-KR'));
@@ -2093,34 +2306,166 @@
       }
     }
 
-    const cloudSyncDebounced = debounce(() => { if (getFirebaseUrl()) pushToCloud(); }, 1500);
+    // 디바운스 타이머: 보류 중이면 즉시 flush 가능하도록 핸들/콜백을 보관
+    let _pushTimer = null;
+    let _pushPending = false;
+    function cloudSyncDebounced() {
+      if (!getFirebaseUrl()) return;
+      _pushPending = true;
+      clearTimeout(_pushTimer);
+      _pushTimer = setTimeout(async () => {
+        _pushTimer = null;
+        _pushPending = false;
+        await pushToCloud();
+      }, 1500);
+    }
+    async function flushPendingPush() {
+      if (!_pushPending) return;
+      clearTimeout(_pushTimer);
+      _pushTimer = null;
+      _pushPending = false;
+      await pushToCloud();
+    }
 
-    function debounce(fn, ms) {
-      let t;
-      return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    // === Lock screen ===
+    let lockSelectedProfile = null;
+
+    function showLockScreen() {
+      lockSelectedProfile = null;
+      $('lockScreen').classList.remove('hidden');
+      $('lockScreen').setAttribute('aria-hidden', 'false');
+      $('lockProfileView').classList.remove('hidden');
+      $('lockPinView').classList.add('hidden');
+      $('lockCreateView').classList.add('hidden');
+      $('lockPinInput').value = '';
+      $('lockError').textContent = '';
+      renderLockProfiles();
+    }
+
+    function hideLockScreen() {
+      $('lockScreen').classList.add('hidden');
+      $('lockScreen').setAttribute('aria-hidden', 'true');
+    }
+
+    function renderLockProfiles() {
+      const list = $('lockProfileList');
+      list.innerHTML = '';
+      if (!state.profiles.length) {
+        const empty = document.createElement('div');
+        empty.className = 'lock-empty';
+        empty.textContent = '아직 프로필이 없습니다. 아래 버튼으로 만들어주세요.';
+        list.appendChild(empty);
+        return;
+      }
+      state.profiles.forEach((p) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lock-profile';
+        btn.innerHTML = `${escapeHtml(p)}<span class="lock-profile-meta">🔒 비밀번호 필요</span>`;
+        btn.addEventListener('click', () => openPinView(p));
+        list.appendChild(btn);
+      });
+    }
+
+    function openPinView(name) {
+      lockSelectedProfile = name;
+      $('lockPinName').textContent = name;
+      const hasPin = !!getProfilePin(name);
+      $('lockPinHint').textContent = hasPin
+        ? '4자리 비밀번호를 입력하세요'
+        : '비밀번호가 설정되어 있지 않습니다. 새로 설정해주세요.';
+      $('lockEnterBtn').textContent = hasPin ? '잠금 해제' : '비밀번호 설정 후 시작';
+      $('lockProfileView').classList.add('hidden');
+      $('lockCreateView').classList.add('hidden');
+      $('lockPinView').classList.remove('hidden');
+      $('lockPinInput').value = '';
+      $('lockError').textContent = '';
+      setTimeout(() => $('lockPinInput').focus(), 0);
+    }
+
+    async function submitLockPin() {
+      const name = lockSelectedProfile;
+      if (!name) return;
+      const entered = $('lockPinInput').value.trim();
+      const errEl = $('lockError');
+      if (!/^\d{4}$/.test(entered)) {
+        errEl.textContent = '4자리 숫자를 입력하세요.';
+        return;
+      }
+      const existing = await fetchCloudPin(name);
+      if (existing) {
+        if (entered !== existing) {
+          errEl.textContent = '비밀번호가 일치하지 않습니다.';
+          $('lockPinInput').value = '';
+          return;
+        }
+        state._pinUnlocked = existing;
+      } else {
+        // PIN 미설정 프로필 마이그레이션: 입력한 4자리를 PIN으로 설정
+        setProfilePin(name, entered);
+        state._pinUnlocked = entered;
+      }
+      await switchProfile(name, { skipPinCheck: true });
+      hideLockScreen();
+    }
+
+    function openLockCreateView() {
+      $('lockProfileView').classList.add('hidden');
+      $('lockPinView').classList.add('hidden');
+      $('lockCreateView').classList.remove('hidden');
+      $('lockCreateName').value = '';
+      $('lockCreatePin').value = '';
+      $('lockCreateError').textContent = '';
+      setTimeout(() => $('lockCreateName').focus(), 0);
+    }
+
+    function submitLockCreate() {
+      const name = $('lockCreateName').value.trim();
+      const pin = $('lockCreatePin').value.trim();
+      const errEl = $('lockCreateError');
+      if (!name) { errEl.textContent = '프로필 이름을 입력하세요.'; return; }
+      if (state.profiles.includes(name)) { errEl.textContent = '이미 존재하는 프로필 이름입니다.'; return; }
+      if (!/^\d{4}$/.test(pin)) { errEl.textContent = '비밀번호는 4자리 숫자여야 합니다.'; return; }
+      const ok = createProfile(name, pin);
+      if (ok) hideLockScreen();
     }
 
     function init() {
       state.profiles = loadProfiles();
-      if (!state.profiles.length) {
-        state.profiles = ['기본 프로필'];
-        saveProfiles(state.profiles);
-      }
-      const saved = localStorage.getItem(KEYS.currentProfile);
-      state.currentProfile = state.profiles.includes(saved) ? saved : state.profiles[0];
-      state.games = loadGames(state.currentProfile);
+      // 레거시 데이터: 이전 버전에서는 PIN 없이 프로필이 만들어질 수 있었으나
+      // 새 정책에서는 비밀번호가 필수. 잠금화면에서 사용자에게 신규 PIN을 받음.
 
       refreshProfileSelect();
-      renderAll();
 
       // Profile events
-      $('profileSelect').addEventListener('change', (e) => switchProfile(e.target.value));
+      $('profileSelect').addEventListener('change', (e) => {
+        const target = e.target.value;
+        if (!target || target === state.currentProfile) return;
+        // 다른 프로필로 전환할 때도 잠금화면을 거치도록 한다
+        e.target.value = state.currentProfile || '';
+        showLockScreen();
+        openPinView(target);
+      });
       $('newProfileBtn').addEventListener('click', () => {
-        const name = prompt('새 프로필 이름:');
-        if (name) createProfile(name);
+        // 헤더의 "+ 새 프로필"도 잠금화면의 생성 플로우와 동일하게 처리
+        showLockScreen();
+        openLockCreateView();
       });
       $('deleteProfileBtn').addEventListener('click', deleteCurrentProfile);
       $('pinBtn').addEventListener('click', changeCurrentProfilePin);
+
+      // Lock screen events
+      $('lockNewProfileBtn').addEventListener('click', openLockCreateView);
+      $('lockBackBtn').addEventListener('click', showLockScreen);
+      $('lockEnterBtn').addEventListener('click', submitLockPin);
+      $('lockPinInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitLockPin();
+      });
+      $('lockCreateCancelBtn').addEventListener('click', showLockScreen);
+      $('lockCreateConfirmBtn').addEventListener('click', submitLockCreate);
+      $('lockCreatePin').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitLockCreate();
+      });
 
       // Category tabs
       document.querySelectorAll('.category-tabs button').forEach((b) => {
@@ -2225,8 +2570,7 @@
       $('pullCloudBtn').addEventListener('click', pullFromCloud);
       $('pushCloudBtn').addEventListener('click', pushToCloud);
       if (getFirebaseUrl()) {
-        setSyncStatus('☁ 자동 동기화 활성화 — 클라우드에서 최신 데이터 가져오는 중...');
-        pullFromCloud();
+        setSyncStatus('☁ 자동 동기화 활성화 — 프로필 선택 후 가져옵니다.');
       } else {
         setSyncStatus('🔸 자동 동기화 미설정. JSON 백업 또는 Firebase URL을 사용하세요.');
       }
@@ -2234,12 +2578,15 @@
       // 탭이 다시 보이거나 창에 포커스 돌아올 때 자동 pull
       // → 다른 기기에서 변경한 내용을 즉시 반영
       const refreshIfActive = () => {
-        if (document.visibilityState === 'visible' && getFirebaseUrl()) {
+        if (state.currentProfile && document.visibilityState === 'visible' && getFirebaseUrl()) {
           pullFromCloud();
         }
       };
       document.addEventListener('visibilitychange', refreshIfActive);
       window.addEventListener('focus', refreshIfActive);
+
+      // 앱 시작 시 항상 잠금화면을 먼저 보여준다 (프로필 선택 + 비밀번호 입력)
+      showLockScreen();
     }
 
     document.addEventListener('DOMContentLoaded', init);
