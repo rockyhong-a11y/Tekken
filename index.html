@@ -2149,6 +2149,16 @@
       } else {
         setSyncStatus('🔸 자동 동기화 미설정. JSON 백업 또는 Firebase URL을 사용하세요.');
       }
+
+      // 탭이 다시 보이거나 창에 포커스 돌아올 때 자동 pull
+      // → 다른 기기에서 변경한 내용을 즉시 반영
+      const refreshIfActive = () => {
+        if (document.visibilityState === 'visible' && getFirebaseUrl()) {
+          pullFromCloud();
+        }
+      };
+      document.addEventListener('visibilitychange', refreshIfActive);
+      window.addEventListener('focus', refreshIfActive);
     }
 
     document.addEventListener('DOMContentLoaded', init);
