@@ -859,6 +859,12 @@
     // 내장 기본 API 키들. 사용자가 LocalStorage에 본인 키를 넣으면 그쪽이 우선.
     const DEFAULT_RAWG_KEY = 'cde46377c7d74bbd88402d2b9f825547';
     const DEFAULT_TMDB_KEY = '4ef13e26f6a9780431acbab7be15f1b9';
+    // ▼ 공유용 기본 Firebase URL. 본인 Realtime DB URL을 넣고 파일을 공유하면
+    //   받는 사람도 URL 입력 없이 자동 동기화됩니다.
+    //   예: 'https://my-tracker-default-rtdb.firebaseio.com'
+    //   비워두면 사용자가 ☁ 패널에서 직접 입력해야 합니다.
+    const DEFAULT_FIREBASE_URL = '';
+
     const getRawgKey = () => localStorage.getItem(KEYS.rawgKey) || DEFAULT_RAWG_KEY;
     const getTmdbKey = () => localStorage.getItem(KEYS.tmdbKey) || DEFAULT_TMDB_KEY;
 
@@ -1963,8 +1969,9 @@
 
     // === Sync: Firebase Realtime DB (REST API) ===
     function getFirebaseUrl() {
-      const url = (localStorage.getItem(KEYS.firebaseUrl) || '').trim().replace(/\/$/, '');
-      return url || null;
+      const user = (localStorage.getItem(KEYS.firebaseUrl) || '').trim().replace(/\/$/, '');
+      const fallback = (DEFAULT_FIREBASE_URL || '').trim().replace(/\/$/, '');
+      return user || fallback || null;
     }
     function setSyncStatus(msg) {
       const el = $('syncStatus');
