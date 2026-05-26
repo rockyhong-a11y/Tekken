@@ -703,6 +703,7 @@
       <label for="profileSelect">프로필</label>
       <select id="profileSelect"></select>
       <button id="newProfileBtn" type="button" class="ghost">＋ 새 프로필</button>
+      <button id="pinBtn" type="button" class="ghost" title="비밀번호 설정">🔒</button>
       <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
       <button id="syncBtn" type="button" class="ghost" title="다기기 동기화">☁</button>
       <button id="themeBtn" type="button" class="ghost" title="테마 전환">🌙</button>
@@ -854,6 +855,14 @@
       theme: 'gametracker:theme',
       firebaseUrl: 'gametracker:firebaseUrl',
       data: (profile) => `gametracker:profile:${profile}`,
+      pin: (profile) => `gametracker:pin:${profile}`,
+    };
+
+    // === Profile PIN (4-digit) ===
+    const getProfilePin = (name) => localStorage.getItem(KEYS.pin(name)) || '';
+    const setProfilePin = (name, pin) => {
+      if (pin) localStorage.setItem(KEYS.pin(name), pin);
+      else localStorage.removeItem(KEYS.pin(name));
     };
 
     // 내장 기본 API 키들. 사용자가 LocalStorage에 본인 키를 넣으면 그쪽이 우선.
@@ -863,7 +872,7 @@
     //   받는 사람도 URL 입력 없이 자동 동기화됩니다.
     //   예: 'https://my-tracker-default-rtdb.firebaseio.com'
     //   비워두면 사용자가 ☁ 패널에서 직접 입력해야 합니다.
-    const DEFAULT_FIREBASE_URL = '';
+    const DEFAULT_FIREBASE_URL = 'https://life-tracker-rocky-default-rtdb.asia-southeast1.firebasedatabase.app';
 
     const getRawgKey = () => localStorage.getItem(KEYS.rawgKey) || DEFAULT_RAWG_KEY;
     const getTmdbKey = () => localStorage.getItem(KEYS.tmdbKey) || DEFAULT_TMDB_KEY;
@@ -1058,12 +1067,41 @@
       });
     }
 
-    function switchProfile(name) {
+    async function switchProfile(name) {
+      // 클라우드에서 최신 PIN을 가져와 확인 (URL 설정된 경우)
+      let pin = getProfilePin(name);
+      if (getFirebaseUrl && getFirebaseUrl()) {
+        try {
+          const base = getFirebaseUrl();
+          const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}.json`, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data.pin === 'string') {
+              pin = data.pin;
+              setProfilePin(name, pin);
+            }
+          }
+        } catch {}
+      }
+
+      // PIN 잠금 검증
+      if (pin && pin !== state._pinUnlocked) {
+        const entered = prompt(`🔒 "${name}" 프로필 비밀번호 (4자리):`);
+        if (entered !== pin) {
+          if (entered !== null) alert('비밀번호가 일치하지 않습니다.');
+          // select를 현재 프로필로 되돌림
+          if (state.currentProfile) {
+            $('profileSelect').value = state.currentProfile;
+          }
+          return;
+        }
+        state._pinUnlocked = pin;
+      }
+
       state.currentProfile = name;
       localStorage.setItem(KEYS.currentProfile, name);
       state.games = loadGames(name);
       renderAll();
-      // 프로필 전환 시 클라우드에서 최신 데이터를 한 번 끌어옴
       if (getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
     }
 
@@ -1074,10 +1112,38 @@
         alert('이미 존재하는 프로필 이름입니다.');
         return;
       }
+      const pin = prompt('4자리 비밀번호 (선택, 잠그지 않으려면 비워두고 확인):');
+      if (pin === null) return; // 취소
+      if (pin && !/^\d{4}$/.test(pin)) {
+        alert('비밀번호는 4자리 숫자만 가능합니다.');
+        return;
+      }
+      setProfilePin(name, pin);
       state.profiles.push(name);
       saveProfiles(state.profiles);
       refreshProfileSelect();
       switchProfile(name);
+    }
+
+    function changeCurrentProfilePin() {
+      if (!state.currentProfile) return;
+      const existing = getProfilePin(state.currentProfile);
+      if (existing) {
+        const cur = prompt('현재 비밀번호 (4자리):');
+        if (cur === null) return;
+        if (cur !== existing) { alert('비밀번호가 일치하지 않습니다.'); return; }
+      }
+      const next = prompt('새 비밀번호 (4자리). 해제하려면 비워두고 확인:');
+      if (next === null) return;
+      if (next && !/^\d{4}$/.test(next)) {
+        alert('4자리 숫자만 가능합니다.');
+        return;
+      }
+      setProfilePin(state.currentProfile, next);
+      state._pinUnlocked = next; // 변경 후 재입력 안 받게
+      // 클라우드에도 즉시 반영
+      if (getFirebaseUrl()) pushToCloud();
+      alert(next ? '비밀번호가 설정되었습니다.' : '비밀번호가 해제되었습니다.');
     }
 
     function deleteCurrentProfile() {
@@ -1088,9 +1154,11 @@
       }
       if (!confirm(`프로필 "${state.currentProfile}" 와 모든 게임 데이터를 삭제할까요?`)) return;
       localStorage.removeItem(KEYS.data(state.currentProfile));
+      localStorage.removeItem(KEYS.pin(state.currentProfile));
       state.profiles = state.profiles.filter((p) => p !== state.currentProfile);
       saveProfiles(state.profiles);
       refreshProfileSelect();
+      state._pinUnlocked = null;
       switchProfile(state.profiles[0]);
     }
 
@@ -1707,20 +1775,17 @@
 
       const rowsHtml = list.map((g) => {
         const isMedia = g.category === 'movie' || g.category === 'tv' || g.category === 'anime';
-        const thumbSrc = isMedia ? (g.poster || g.background_image) : g.background_image;
-        const thumbCls = isMedia ? 'row-thumb media-thumb' : 'row-thumb';
+        // 영상도 게임과 동일한 가로형 썸네일·단순 제목 — 부가 정보 줄 제거
+        const thumbSrc = isMedia ? (g.backdrop || g.poster || g.background_image) : g.background_image;
         const thumb = thumbSrc
-          ? `<img src="${escapeHtml(thumbSrc)}" class="${thumbCls}" alt="" />`
+          ? `<img src="${escapeHtml(thumbSrc)}" class="row-thumb" alt="" />`
           : '';
         const genres = (g.genres || []).join(', ');
         const created = g.createdAt ? new Date(g.createdAt).toLocaleDateString('ko-KR') : '';
-        const subline = isMedia ? rowMediaSubline(g) : '';
-        const titleLink = (isMedia && g.tmdb_id)
-          ? `<a class="row-title-link" href="${tmdbSiteUrl(g.tmdb_type, g.tmdb_id)}" target="_blank" rel="noreferrer noopener">${escapeHtml(g.title)}</a>`
-          : escapeHtml(g.title);
+        const titleHtml = escapeHtml(g.title);
         return `
           <tr class="row-${g.status}">
-            <td data-col="title"><span class="row-title">${thumb}${titleLink}${subline}</span></td>
+            <td data-col="title"><span class="row-title">${thumb}${titleHtml}</span></td>
             <td data-col="status"><span class="row-status status-${g.status}"></span>${statusLabel(g.status, g.category)}</td>
             <td data-col="platform">${escapeHtml(g.platform || '')}</td>
             <td data-col="genres">${escapeHtml(genres)}</td>
@@ -1986,7 +2051,11 @@
         const res = await fetch(endpoint, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updatedAt: Date.now(), games: state.games }),
+          body: JSON.stringify({
+            updatedAt: Date.now(),
+            pin: getProfilePin(state.currentProfile),
+            games: state.games,
+          }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setSyncStatus('☁ 보냄 ' + new Date().toLocaleTimeString('ko-KR'));
@@ -2006,8 +2075,12 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data && Array.isArray(data.games)) {
-          state.games = data.games.map((g) => ({ ...g, category: g.category || 'game' }));
+          state.games = data.games.map((g) => {
+            const c = g.category || 'game';
+            return { ...g, category: c === 'anime' ? 'tv' : c };
+          });
           localStorage.setItem(KEYS.data(state.currentProfile), JSON.stringify(state.games));
+          if (typeof data.pin === 'string') setProfilePin(state.currentProfile, data.pin);
           renderAll();
           setSyncStatus('☁ 가져옴 ' + new Date().toLocaleTimeString('ko-KR'));
           return true;
@@ -2047,6 +2120,7 @@
         if (name) createProfile(name);
       });
       $('deleteProfileBtn').addEventListener('click', deleteCurrentProfile);
+      $('pinBtn').addEventListener('click', changeCurrentProfilePin);
 
       // Category tabs
       document.querySelectorAll('.category-tabs button').forEach((b) => {
