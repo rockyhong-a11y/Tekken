@@ -7,8 +7,7 @@
 | 카테고리 | DB | 키 필요 |
 |---|---|---|
 | 🎮 게임 | [RAWG](https://rawg.io/apidocs) | 내장 기본키 (사용자 키 우선) |
-| 🎬 영화 | [TMDB](https://www.themoviedb.org/) | 내장 기본키 |
-| 📺 애니메이션 | [TMDB (TV)](https://www.themoviedb.org/) | 내장 기본키 (영화와 공유) |
+| 🎬 영상 (영화·TV·애니·OVA 등 통합) | [TMDB movie + tv](https://www.themoviedb.org/) | 내장 기본키 |
 
 ## Stack
 

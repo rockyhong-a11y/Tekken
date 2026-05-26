@@ -318,6 +318,17 @@
     }
     .lookup-result .meta { font-size: 12px; color: var(--muted); }
     .lookup-result strong { display: block; }
+    .type-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-right: 6px;
+      font-weight: 500;
+      vertical-align: middle;
+    }
+    .type-badge.movie { background: rgba(255, 0, 51, 0.15); color: #ff6b8a; }
+    .type-badge.tv { background: rgba(1, 180, 228, 0.15); color: #4dd0ff; }
 
     .screenshot-preview {
       display: flex;
@@ -730,8 +741,7 @@
 
   <nav class="category-tabs" id="categoryTabs" role="tablist">
     <button type="button" data-cat="game" class="active">🎮 게임</button>
-    <button type="button" data-cat="movie">🎬 영화</button>
-    <button type="button" data-cat="anime">📺 애니메이션</button>
+    <button type="button" data-cat="media">🎬 영상</button>
   </nav>
 
   <main>
@@ -853,29 +863,28 @@
     const getTmdbKey = () => localStorage.getItem(KEYS.tmdbKey) || DEFAULT_TMDB_KEY;
 
     // === Categories ===
+    // 탭은 2개: game / media. media는 영화·TV·애니·극장판·OVA 등 모든 영상을 포함.
+    // 저장되는 item.category는 'game' | 'movie' | 'tv' — TMDB 타입에 따라 결정.
     const CATEGORIES = {
-      game:  { titleLabel: '게임명',   platformLabel: '플랫폼',     releasedLabel: '발매일',
-               formTitle: '새 게임 추가',     placeholder: '예: Tekken 8 / 철권 8 (입력하면 자동 검색)' },
-      movie: { titleLabel: '영화 제목', platformLabel: '시청 매체',  releasedLabel: '개봉일',
-               formTitle: '새 영화 추가',     placeholder: '예: Inception / 인셉션 (입력하면 자동 검색)' },
-      anime: { titleLabel: '애니 제목', platformLabel: '시청 매체',  releasedLabel: '방영일',
-               formTitle: '새 애니메이션 추가', placeholder: '예: One Piece / 원피스 (입력하면 자동 검색)' },
+      game:  { titleLabel: '게임명', platformLabel: '플랫폼',    releasedLabel: '발매일',
+               formTitle: '새 게임 추가', placeholder: '예: Tekken 8 / 철권 8 (입력하면 자동 검색)' },
+      media: { titleLabel: '제목',   platformLabel: '시청 매체', releasedLabel: '공개일',
+               formTitle: '새 영상 추가', placeholder: '영화 / TV 시리즈 / 애니 / 극장판 / OVA (자동 검색)' },
     };
     const PLATFORMS = {
       game: ['PC (Steam)','PC (Epic)','PC (GOG)','PC (Microsoft Store)',
              'PlayStation 5','PlayStation 4','Xbox Series X|S','Xbox One',
              'Nintendo Switch','Nintendo Switch 2','Steam Deck',
              'iOS','Android','Arcade','기타'],
-      movie: ['극장','Netflix','Disney+','Apple TV+','Amazon Prime',
+      media: ['극장','Netflix','Disney+','Apple TV+','Amazon Prime',
               'Watcha','티빙 (TVING)','웨이브 (Wavve)','쿠팡플레이',
+              '라프텔 (Laftel)','Crunchyroll',
+              'TV 방영','극장판','OVA',
               'YouTube','Blu-ray / DVD','기타'],
-      anime: ['라프텔 (Laftel)','Netflix','Crunchyroll','디즈니+','아마존 프라임',
-              '티빙 (TVING)','웨이브 (Wavve)','TV 방영','극장판','OVA','기타'],
     };
     const STATUS_LABELS = {
       game:  { cleared: '클리어',    playing: '플레이 중', planned: '플레이 예정' },
-      movie: { cleared: '시청 완료', playing: '시청 중',   planned: '시청 예정' },
-      anime: { cleared: '완주',      playing: '시청 중',   planned: '시청 예정' },
+      media: { cleared: '시청 완료', playing: '시청 중',   planned: '시청 예정' },
     };
 
     // TMDB 장르 ID → 한국어 (search 응답은 genre_ids만 반환)
@@ -893,7 +902,12 @@
       10768: '전쟁 & 정치', 37: '서부',
     };
 
-    let currentCategory = localStorage.getItem(KEYS.category) || 'game';
+    let currentCategory = (() => {
+      const saved = localStorage.getItem(KEYS.category);
+      // 레거시: 'movie' / 'anime' 저장값은 통합된 'media'로 매핑
+      if (saved === 'movie' || saved === 'anime') return 'media';
+      return saved || 'game';
+    })();
 
     // === Localization ===
     // RAWG 장르 라벨은 종류가 한정적이라 정적 사전으로 즉시 변환
@@ -985,8 +999,11 @@
       if (!profile) return [];
       const raw = localStorage.getItem(KEYS.data(profile));
       const items = raw ? JSON.parse(raw) : [];
-      // 카테고리 필드 없는 레거시 데이터는 'game'으로 간주
-      return items.map((g) => ({ ...g, category: g.category || 'game' }));
+      return items.map((g) => {
+        const c = g.category || 'game';
+        // 레거시 'anime' → 'tv'로 정규화
+        return { ...g, category: c === 'anime' ? 'tv' : c };
+      });
     }
 
     function saveGames() {
@@ -1012,7 +1029,10 @@
     }
 
     function statusLabel(s, cat) {
-      return (STATUS_LABELS[cat || currentCategory] || STATUS_LABELS.game)[s] || s;
+      let c = cat || currentCategory;
+      // 레거시 항목 카테고리(movie/tv/anime) → media 라벨로 통합
+      if (c === 'movie' || c === 'tv' || c === 'anime') c = 'media';
+      return (STATUS_LABELS[c] || STATUS_LABELS.game)[s] || s;
     }
 
     function stripHtml(s) {
@@ -1203,23 +1223,32 @@
           background_image: raw.background_image || '',
         };
       }
-      if (currentCategory === 'movie') return normalizeMedia(raw, 'movie');
-      if (currentCategory === 'anime') return normalizeMedia(raw, 'tv');
+      if (currentCategory === 'media') return normalizeMedia(raw, raw._tmdbType || 'movie');
       return { _raw: raw, title: '', genres: [], description: '', background_image: '', released: '' };
     }
 
-    // 검색: 카테고리에 맞는 API 호출 + 정규화. 한글 쿼리는 RAWG에 한해 영문 변환.
+    // 검색: 카테고리에 맞는 API 호출 + 정규화.
+    // media는 영화·TV를 병렬로 모두 검색해 popularity 내림차순으로 병합.
     async function searchByCategory(query) {
-      let raw = [];
       if (currentCategory === 'game') {
         const q = await toEnglish(query);
-        raw = (await rawgSearch(q)) || [];
-      } else if (currentCategory === 'movie') {
-        raw = await tmdbSearch(query, 'movie');
-      } else if (currentCategory === 'anime') {
-        raw = await tmdbSearch(query, 'tv');
+        const raw = (await rawgSearch(q)) || [];
+        return raw.map(normalizeItem);
       }
-      return raw.map(normalizeItem);
+      if (currentCategory === 'media') {
+        const [movies, tvs] = await Promise.all([
+          tmdbSearch(query, 'movie'),
+          tmdbSearch(query, 'tv'),
+        ]);
+        const tagged = [
+          ...movies.map((m) => Object.assign(m, { _tmdbType: 'movie' })),
+          ...tvs.map((t) => Object.assign(t, { _tmdbType: 'tv' })),
+        ];
+        // popularity 점수 높은 순 정렬 (TMDB가 제공)
+        tagged.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        return tagged.map((raw) => normalizeMedia(raw, raw._tmdbType));
+      }
+      return [];
     }
 
     async function detailByCategory(item) {
@@ -1247,10 +1276,15 @@
         const div = document.createElement('div');
         div.className = 'lookup-result';
         const genres = (r.genres || []).join(', ');
+        const typeBadge = r.tmdb_type === 'movie'
+          ? '<span class="type-badge movie">🎬 영화</span>'
+          : r.tmdb_type === 'tv'
+          ? '<span class="type-badge tv">📺 TV/애니</span>'
+          : '';
         div.innerHTML = `
           <img src="${r.background_image || ''}" alt="" onerror="this.style.opacity=0.2" />
           <div style="flex:1; min-width:0">
-            <strong>${escapeHtml(r.title)}</strong>
+            <strong>${typeBadge}${escapeHtml(r.title)}</strong>
             <div class="meta">${escapeHtml(r.released || '')} · ${escapeHtml(genres)}</div>
           </div>
         `;
@@ -1328,9 +1362,17 @@
       const title = $('title').value.trim();
       const genres = $('genres').value.split(',').map((g) => g.trim()).filter(Boolean);
 
+      // media 탭에서는 항목별 카테고리를 tmdb_type에 따라 'movie'/'tv'로 저장.
+      // 기존 항목 수정 시에는 기존 카테고리 유지 (existing.category 우선).
+      let itemCategory = currentCategory;
+      if (currentCategory === 'media') {
+        itemCategory = (existing && existing.category) || meta.tmdb_type || 'movie';
+        if (itemCategory === 'anime') itemCategory = 'tv'; // 레거시 정규화
+      }
+
       const base = {
         id,
-        category: currentCategory,
+        category: itemCategory,
         title,
         status: $('status').value,
         platform: $('platform').value,
@@ -1343,10 +1385,10 @@
         createdAt: existing ? existing.createdAt : Date.now(),
       };
 
-      if (currentCategory === 'movie' || currentCategory === 'anime') {
+      if (itemCategory === 'movie' || itemCategory === 'tv') {
         Object.assign(base, {
           tmdb_id: meta.tmdb_id || null,
-          tmdb_type: meta.tmdb_type || (currentCategory === 'anime' ? 'tv' : 'movie'),
+          tmdb_type: meta.tmdb_type || (itemCategory === 'tv' ? 'tv' : 'movie'),
           poster: meta.poster || '',
           backdrop: meta.backdrop || '',
           directors: meta.directors || [],
@@ -1443,7 +1485,10 @@
       const fp = $('filterPlatform').value;
       const fg = $('filterGenre').value;
       return state.games.filter((g) => {
-        if ((g.category || 'game') !== currentCategory) return false;
+        const itemCat = g.category || 'game';
+        // game 탭: game 항목만. media 탭: game 외 모든 항목 (movie/tv/anime 레거시 포함).
+        if (currentCategory === 'game' && itemCat !== 'game') return false;
+        if (currentCategory === 'media' && itemCat === 'game') return false;
         if (fs !== 'all' && g.status !== fs) return false;
         if (fp !== 'all' && g.platform !== fp) return false;
         if (fg !== 'all' && !(g.genres || []).includes(fg)) return false;
@@ -1480,17 +1525,26 @@
       return `https://www.youtube.com/results?search_query=${q}`;
     }
 
-    // 리스트 뷰의 ▶ 버튼 — 영화/애니는 예고편, 게임은 공략 검색
-    function rowPlayLink(g) {
-      if ((g.category === 'movie' || g.category === 'anime') && g.trailer) {
-        return `<a class="youtube" href="${escapeHtml(g.trailer)}" target="_blank" rel="noreferrer noopener" title="예고편">▶</a>`;
+    // 리스트 뷰의 액션 버튼 그룹 — 영화/TV는 예고편 + TMDB, 게임은 공략 검색
+    function rowMediaButtons(g) {
+      const isMedia = g.category === 'movie' || g.category === 'tv' || g.category === 'anime';
+      const parts = [];
+      if (isMedia) {
+        if (g.trailer) {
+          parts.push(`<a class="youtube" href="${escapeHtml(g.trailer)}" target="_blank" rel="noreferrer noopener" title="예고편">▶</a>`);
+        }
+        if (g.tmdb_id) {
+          const t = g.tmdb_type || (g.category === 'movie' ? 'movie' : 'tv');
+          parts.push(`<a class="tmdb-mini" href="${tmdbSiteUrl(t, g.tmdb_id)}" target="_blank" rel="noreferrer noopener" title="TMDB에서 보기">🔗</a>`);
+        }
+      } else {
+        parts.push(`<a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener" title="유튜브 공략">▶</a>`);
       }
-      if (g.category === 'movie' || g.category === 'anime') return '';
-      return `<a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener" title="유튜브 공략">▶</a>`;
+      return parts.join('');
     }
 
     function gameCardHTML(g) {
-      if (g.category === 'movie' || g.category === 'anime') return mediaCardHTML(g);
+      if (g.category === 'movie' || g.category === 'tv' || g.category === 'anime') return mediaCardHTML(g);
 
       const shots = (g.screenshots || []).slice(0, 4).map((s, i) => `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
       const cover = g.background_image
@@ -1525,7 +1579,7 @@
 
     function mediaCardHTML(g) {
       const cat = g.category;
-      const tmdbType = g.tmdb_type || (cat === 'anime' ? 'tv' : 'movie');
+      const tmdbType = g.tmdb_type || (cat === 'tv' || cat === 'anime' ? 'tv' : 'movie');
       const tmdbPage = g.tmdb_id ? tmdbSiteUrl(tmdbType, g.tmdb_id) : '';
 
       const hero = g.backdrop || g.poster || g.background_image;
@@ -1646,7 +1700,7 @@
       ).join('') + '<th data-col="actions">액션</th>';
 
       const rowsHtml = list.map((g) => {
-        const isMedia = g.category === 'movie' || g.category === 'anime';
+        const isMedia = g.category === 'movie' || g.category === 'tv' || g.category === 'anime';
         const thumbSrc = isMedia ? (g.poster || g.background_image) : g.background_image;
         const thumbCls = isMedia ? 'row-thumb media-thumb' : 'row-thumb';
         const thumb = thumbSrc
@@ -1773,7 +1827,7 @@
       const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
       const img = (src, w) => src ? `<img src="${src}" width="${w}" />` : '';
 
-      const CAT_LABEL = { game: '🎮 게임', movie: '🎬 영화', anime: '📺 애니메이션' };
+      const CAT_LABEL = { game: '🎮 게임', movie: '🎬 영화', tv: '📺 TV/애니', anime: '📺 애니메이션' };
 
       const rowsHtml = games.map((g) => {
         const bg = ROW_BG[g.status] || '#FFFFFF';
