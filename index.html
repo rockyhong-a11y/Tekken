@@ -854,6 +854,7 @@
       <label for="profileSelect">프로필</label>
       <select id="profileSelect"></select>
       <button id="newProfileBtn" type="button" class="ghost">＋ 새 프로필</button>
+      <button id="renameProfileBtn" type="button" class="ghost" title="프로필 이름 변경">✎</button>
       <button id="pinBtn" type="button" class="ghost" title="비밀번호 설정">🔒</button>
       <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
       <button id="syncBtn" type="button" class="ghost" title="다기기 동기화">☁</button>
@@ -1329,6 +1330,64 @@
       // 클라우드에도 즉시 반영
       if (getFirebaseUrl()) pushToCloud();
       alert('비밀번호가 변경되었습니다.');
+    }
+
+    async function renameCurrentProfile() {
+      const oldName = state.currentProfile;
+      if (!oldName) return;
+      // 현재 비밀번호 확인
+      const existing = getProfilePin(oldName);
+      if (existing) {
+        const cur = prompt('현재 비밀번호 (4자리):');
+        if (cur === null) return;
+        if (cur !== existing) { alert('비밀번호가 일치하지 않습니다.'); return; }
+      }
+      const raw = prompt('새 프로필 이름:', oldName);
+      if (raw === null) return;
+      const newName = raw.trim();
+      if (!newName) { alert('프로필 이름을 입력해주세요.'); return; }
+      if (newName === oldName) return;
+      if (state.profiles.includes(newName)) {
+        alert('이미 존재하는 프로필 이름입니다.');
+        return;
+      }
+
+      // 보류 중인 동기화 먼저 비워서 이름 변경 후 잘못된 경로로 쓰이지 않도록
+      await flushPendingPush();
+
+      // 로컬 키 이동: 데이터, PIN, 마지막 변경 시각
+      const dataRaw = localStorage.getItem(KEYS.data(oldName));
+      const pin = localStorage.getItem(KEYS.pin(oldName));
+      const localAt = localStorage.getItem(KEYS.localUpdatedAt(oldName));
+      if (dataRaw !== null) localStorage.setItem(KEYS.data(newName), dataRaw);
+      if (pin !== null) localStorage.setItem(KEYS.pin(newName), pin);
+      if (localAt !== null) localStorage.setItem(KEYS.localUpdatedAt(newName), localAt);
+      localStorage.removeItem(KEYS.data(oldName));
+      localStorage.removeItem(KEYS.pin(oldName));
+      localStorage.removeItem(KEYS.localUpdatedAt(oldName));
+
+      // profiles 배열에서 같은 위치에 새 이름으로 교체
+      const idx = state.profiles.indexOf(oldName);
+      if (idx !== -1) state.profiles[idx] = newName;
+      saveProfiles(state.profiles);
+      state.currentProfile = newName;
+      localStorage.setItem(KEYS.currentProfile, newName);
+      refreshProfileSelect();
+
+      // 클라우드에서도 이름 변경 (새 경로에 푸시 → 옛 경로 삭제)
+      if (getFirebaseUrl && getFirebaseUrl()) {
+        state._suppressPull = true;
+        try {
+          await pushToCloud();
+          try {
+            await fetch(`${getFirebaseUrl()}/profiles/${encodeURIComponent(oldName)}.json`, { method: 'DELETE' });
+          } catch {}
+        } finally {
+          state._suppressPull = false;
+        }
+      }
+
+      alert(`프로필 이름이 "${newName}" 로 변경되었습니다.`);
     }
 
     async function deleteCurrentProfile() {
@@ -2452,6 +2511,7 @@
         openLockCreateView();
       });
       $('deleteProfileBtn').addEventListener('click', deleteCurrentProfile);
+      $('renameProfileBtn').addEventListener('click', renameCurrentProfile);
       $('pinBtn').addEventListener('click', changeCurrentProfilePin);
 
       // Lock screen events
