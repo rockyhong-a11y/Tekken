@@ -1222,9 +1222,13 @@
         const opt = document.createElement('option');
         opt.value = p;
         opt.textContent = p;
-        if (p === state.currentProfile) opt.selected = true;
         sel.appendChild(opt);
       });
+      // 옵션을 모두 추가한 뒤 명시적으로 value를 지정해야 첫 옵션이 기본 선택되는
+      // 문제 없이 현재 프로필이 정확히 표시된다
+      if (state.currentProfile && state.profiles.includes(state.currentProfile)) {
+        sel.value = state.currentProfile;
+      }
     }
 
     // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영
