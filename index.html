@@ -1231,6 +1231,43 @@
       }
     }
 
+    // 클라우드의 /profiles 컬렉션에서 프로필 이름 목록을 가져온다
+    // (shallow=true 옵션으로 키만 받아 데이터 본문은 받지 않음)
+    async function fetchCloudProfileNames() {
+      const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
+      if (!base) return null;
+      try {
+        const res = await fetch(`${base}/profiles.json?shallow=true`, { cache: 'no-store' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data && typeof data === 'object') return Object.keys(data);
+      } catch {}
+      return null;
+    }
+
+    // 클라우드와 로컬의 프로필 목록을 합집합으로 동기화. 새로 추가된 항목이
+    // 있으면 잠금화면/드롭다운을 다시 그린다.
+    async function syncProfileListFromCloud() {
+      const names = await fetchCloudProfileNames();
+      if (!names || !names.length) return false;
+      let changed = false;
+      for (const n of names) {
+        if (!state.profiles.includes(n)) {
+          state.profiles.push(n);
+          changed = true;
+        }
+      }
+      if (changed) {
+        saveProfiles(state.profiles);
+        refreshProfileSelect();
+        // 잠금화면이 표시 중이면 즉시 반영
+        if (!$('lockScreen').classList.contains('hidden')) {
+          renderLockProfiles();
+        }
+      }
+      return changed;
+    }
+
     // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영
     async function fetchCloudPin(name) {
       const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
@@ -2404,6 +2441,10 @@
       $('lockPinInput').value = '';
       $('lockError').textContent = '';
       renderLockProfiles();
+      // 다른 기기에서 만든 프로필이 있을 수 있으니 클라우드에서 목록을 가져와 병합
+      if (typeof getFirebaseUrl === 'function' && getFirebaseUrl()) {
+        syncProfileListFromCloud();
+      }
     }
 
     function hideLockScreen() {
