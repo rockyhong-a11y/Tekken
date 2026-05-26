@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Game Life Tracker</title>
   <style>
-    :root {
+    :root, :root[data-theme="dark"] {
       --bg: #0f1117;
       --surface: #181b25;
       --surface-2: #21253256;
@@ -14,6 +14,8 @@
       --muted: #8b91a6;
       --accent: #7c5cff;
       --accent-hover: #9479ff;
+      --topbar-grad-top: #161927;
+      --topbar-grad-bottom: #0f1117;
 
       --status-cleared: #22c55e;
       --status-playing: #3b82f6;
@@ -25,6 +27,29 @@
 
       --radius: 10px;
       --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --surface-2: #eef0f6;
+      --border: #d8dbe6;
+      --text: #1a1d2e;
+      --muted: #6b7280;
+      --accent: #6a4ef0;
+      --accent-hover: #5639d8;
+      --topbar-grad-top: #ffffff;
+      --topbar-grad-bottom: #f5f6fa;
+
+      --status-cleared: #15803d;
+      --status-playing: #1d4ed8;
+      --status-planned: #c2410c;
+
+      --status-cleared-bg: rgba(22, 163, 74, 0.12);
+      --status-playing-bg: rgba(37, 99, 235, 0.12);
+      --status-planned-bg: rgba(234, 88, 12, 0.12);
+
+      --shadow: 0 4px 16px rgba(20, 25, 50, 0.08);
     }
 
     * { box-sizing: border-box; }
@@ -54,7 +79,7 @@
       gap: 16px;
       padding: 20px 32px;
       border-bottom: 1px solid var(--border);
-      background: linear-gradient(180deg, #161927 0%, #0f1117 100%);
+      background: linear-gradient(180deg, var(--topbar-grad-top) 0%, var(--topbar-grad-bottom) 100%);
     }
 
     .brand h1 { margin: 0; font-size: 22px; }
@@ -90,6 +115,7 @@
       .profile-bar label { display: none; }
       .profile-bar select { flex: 1; min-width: 0; }
       .profile-bar button { padding: 7px 10px; font-size: 12px; }
+      .profile-bar #themeBtn, .profile-bar #syncBtn { padding: 7px 9px; font-size: 14px; }
 
       main { padding: 12px; gap: 14px; }
       .form-card, .library { padding: 14px; }
@@ -667,8 +693,40 @@
       <select id="profileSelect"></select>
       <button id="newProfileBtn" type="button" class="ghost">＋ 새 프로필</button>
       <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
+      <button id="syncBtn" type="button" class="ghost" title="다기기 동기화">☁</button>
+      <button id="themeBtn" type="button" class="ghost" title="테마 전환">🌙</button>
     </div>
   </header>
+
+  <section id="syncPanel" class="settings-panel hidden">
+    <h2>다기기 동기화</h2>
+
+    <p class="muted" style="margin-top:0">동일 프로필을 다른 기기에서도 보려면 둘 중 하나를 사용하세요.</p>
+
+    <h3 style="margin:14px 0 6px; font-size:14px">방법 1. JSON 백업 파일 (모든 환경 호환)</h3>
+    <p class="help">백업을 받아 iCloud Drive / Google Drive / Dropbox 등에 저장 후 다른 기기에서 복원하세요.</p>
+    <div class="row">
+      <button id="exportJsonBtn" type="button">📥 백업 받기</button>
+      <button id="importJsonBtn" type="button" class="ghost">📤 백업 복원</button>
+      <input type="file" id="importJsonFile" accept=".json,application/json" hidden />
+    </div>
+
+    <h3 style="margin:20px 0 6px; font-size:14px">방법 2. Firebase 자동 동기화 (선택)</h3>
+    <p class="help">
+      <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer noopener">Firebase 콘솔</a>에서
+      프로젝트 생성 → Realtime Database → 테스트 모드로 시작 → 데이터베이스 URL 복사 → 아래에 붙여넣기.
+      이후 같은 프로필을 다른 기기에서도 자동으로 동기화합니다.
+    </p>
+    <div class="row">
+      <input type="text" id="firebaseUrl" placeholder="https://your-project-default-rtdb.firebaseio.com" />
+      <button id="saveFirebaseUrl" type="button">저장</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="pullCloudBtn" type="button" class="ghost">⬇ 클라우드에서 가져오기</button>
+      <button id="pushCloudBtn" type="button" class="ghost">⬆ 클라우드로 보내기</button>
+    </div>
+    <p class="muted" id="syncStatus"></p>
+  </section>
 
   <nav class="category-tabs" id="categoryTabs" role="tablist">
     <button type="button" data-cat="game" class="active">🎮 게임</button>
@@ -756,8 +814,8 @@
         </div>
         <div class="view-controls">
           <div class="view-toggle" role="tablist">
-            <button type="button" data-view="list">📋 목록</button>
             <button type="button" data-view="cards">🃏 카드</button>
+            <button type="button" data-view="list">📋 목록</button>
           </div>
           <button type="button" id="exportBtn">📥 엑셀 내보내기</button>
         </div>
@@ -783,6 +841,8 @@
       rawgKey: 'gametracker:rawgKey',
       tmdbKey: 'gametracker:tmdbKey',
       category: 'gametracker:category',
+      theme: 'gametracker:theme',
+      firebaseUrl: 'gametracker:firebaseUrl',
       data: (profile) => `gametracker:profile:${profile}`,
     };
 
@@ -932,6 +992,8 @@
     function saveGames() {
       if (!state.currentProfile) return;
       localStorage.setItem(KEYS.data(state.currentProfile), JSON.stringify(state.games));
+      // Firebase URL이 설정되어 있으면 자동으로 클라우드에도 푸시
+      if (typeof cloudSyncDebounced === 'function') cloudSyncDebounced();
     }
 
     function fileToDataURL(file) {
@@ -975,6 +1037,8 @@
       localStorage.setItem(KEYS.currentProfile, name);
       state.games = loadGames(name);
       renderAll();
+      // 프로필 전환 시 클라우드에서 최신 데이터를 한 번 끌어옴
+      if (getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
     }
 
     function createProfile(name) {
@@ -1159,15 +1223,16 @@
     }
 
     async function detailByCategory(item) {
-      if (currentCategory === 'game') return normalizeItem((await rawgDetail(item._id)) || item._raw);
-      if (currentCategory === 'movie') {
+      // 검색결과의 tmdb_type을 우선 사용 — 카테고리 전환 도중에도 안전
+      if (item.tmdb_type === 'movie') {
         const d = await tmdbDetail(item._id, 'movie');
         return d ? normalizeMedia(d, 'movie') : item;
       }
-      if (currentCategory === 'anime') {
+      if (item.tmdb_type === 'tv') {
         const d = await tmdbDetail(item._id, 'tv');
         return d ? normalizeMedia(d, 'tv') : item;
       }
+      if (currentCategory === 'game') return normalizeItem((await rawgDetail(item._id)) || item._raw);
       return item;
     }
 
@@ -1368,7 +1433,7 @@
     }
 
     // === View / sort state ===
-    let viewMode = localStorage.getItem('gametracker:viewMode') || 'list';
+    let viewMode = localStorage.getItem('gametracker:viewMode') || 'cards';
     let sortKey = 'createdAt';
     let sortDir = 'desc';
 
@@ -1581,21 +1646,28 @@
       ).join('') + '<th data-col="actions">액션</th>';
 
       const rowsHtml = list.map((g) => {
-        const thumb = g.background_image
-          ? `<img src="${escapeHtml(g.background_image)}" class="row-thumb" alt="" />`
+        const isMedia = g.category === 'movie' || g.category === 'anime';
+        const thumbSrc = isMedia ? (g.poster || g.background_image) : g.background_image;
+        const thumbCls = isMedia ? 'row-thumb media-thumb' : 'row-thumb';
+        const thumb = thumbSrc
+          ? `<img src="${escapeHtml(thumbSrc)}" class="${thumbCls}" alt="" />`
           : '';
         const genres = (g.genres || []).join(', ');
         const created = g.createdAt ? new Date(g.createdAt).toLocaleDateString('ko-KR') : '';
+        const subline = isMedia ? rowMediaSubline(g) : '';
+        const titleLink = (isMedia && g.tmdb_id)
+          ? `<a class="row-title-link" href="${tmdbSiteUrl(g.tmdb_type, g.tmdb_id)}" target="_blank" rel="noreferrer noopener">${escapeHtml(g.title)}</a>`
+          : escapeHtml(g.title);
         return `
           <tr class="row-${g.status}">
-            <td data-col="title"><span class="row-title">${thumb}${escapeHtml(g.title)}</span></td>
+            <td data-col="title"><span class="row-title">${thumb}${titleLink}${subline}</span></td>
             <td data-col="status"><span class="row-status status-${g.status}"></span>${statusLabel(g.status, g.category)}</td>
             <td data-col="platform">${escapeHtml(g.platform || '')}</td>
             <td data-col="genres">${escapeHtml(genres)}</td>
             <td data-col="released">${escapeHtml(g.released || '')}</td>
             <td data-col="createdAt">${created}</td>
             <td data-col="actions" class="row-actions">
-              ${rowPlayLink(g)}
+              ${rowMediaButtons(g)}
               <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
               <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
             </td>
@@ -1785,6 +1857,115 @@
     }
 
     // === Init ===
+    // === Theme ===
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem(KEYS.theme, theme);
+      const btn = $('themeBtn');
+      if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+    }
+
+    // === Sync: JSON file backup ===
+    function exportBackupJson() {
+      const data = {
+        app: 'tekken-life-tracker',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        profiles: state.profiles,
+        data: {},
+      };
+      state.profiles.forEach((p) => {
+        const raw = localStorage.getItem(KEYS.data(p));
+        data.data[p] = raw ? JSON.parse(raw) : [];
+      });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `life-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function importBackupJson(file) {
+      const text = await file.text();
+      let data;
+      try { data = JSON.parse(text); } catch { alert('JSON 파싱 실패'); return; }
+      if (!data.profiles || !data.data) { alert('잘못된 백업 파일 형식'); return; }
+      if (!confirm(`백업 파일을 불러올까요?\n프로필 ${data.profiles.length}개, ${Object.values(data.data).reduce((n, arr) => n + (arr ? arr.length : 0), 0)}개 항목.\n현재 데이터는 덮어쓰여집니다.`)) return;
+
+      state.profiles = data.profiles;
+      saveProfiles(state.profiles);
+      Object.entries(data.data).forEach(([p, items]) => {
+        localStorage.setItem(KEYS.data(p), JSON.stringify(items));
+      });
+      const newCurrent = state.profiles.includes(state.currentProfile) ? state.currentProfile : state.profiles[0];
+      refreshProfileSelect();
+      switchProfile(newCurrent);
+      alert('복원 완료!');
+    }
+
+    // === Sync: Firebase Realtime DB (REST API) ===
+    function getFirebaseUrl() {
+      const url = (localStorage.getItem(KEYS.firebaseUrl) || '').trim().replace(/\/$/, '');
+      return url || null;
+    }
+    function setSyncStatus(msg) {
+      const el = $('syncStatus');
+      if (el) el.textContent = msg;
+    }
+
+    async function pushToCloud() {
+      const base = getFirebaseUrl();
+      if (!base || !state.currentProfile) return false;
+      const endpoint = `${base}/profiles/${encodeURIComponent(state.currentProfile)}.json`;
+      try {
+        const res = await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updatedAt: Date.now(), games: state.games }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setSyncStatus('☁ 보냄 ' + new Date().toLocaleTimeString('ko-KR'));
+        return true;
+      } catch (err) {
+        setSyncStatus('⚠ 보내기 실패: ' + err.message);
+        return false;
+      }
+    }
+
+    async function pullFromCloud() {
+      const base = getFirebaseUrl();
+      if (!base || !state.currentProfile) return false;
+      const endpoint = `${base}/profiles/${encodeURIComponent(state.currentProfile)}.json`;
+      try {
+        const res = await fetch(endpoint, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.games)) {
+          state.games = data.games.map((g) => ({ ...g, category: g.category || 'game' }));
+          localStorage.setItem(KEYS.data(state.currentProfile), JSON.stringify(state.games));
+          renderAll();
+          setSyncStatus('☁ 가져옴 ' + new Date().toLocaleTimeString('ko-KR'));
+          return true;
+        }
+        setSyncStatus('☁ 클라우드에 데이터 없음 (첫 동기화는 ⬆ 클라우드로 보내기로 시작)');
+        return false;
+      } catch (err) {
+        setSyncStatus('⚠ 가져오기 실패: ' + err.message);
+        return false;
+      }
+    }
+
+    const cloudSyncDebounced = debounce(() => { if (getFirebaseUrl()) pushToCloud(); }, 1500);
+
+    function debounce(fn, ms) {
+      let t;
+      return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    }
+
     function init() {
       state.profiles = loadProfiles();
       if (!state.profiles.length) {
@@ -1876,6 +2057,44 @@
 
       // Export
       $('exportBtn').addEventListener('click', exportToExcel);
+
+      // Theme toggle
+      applyTheme(localStorage.getItem(KEYS.theme) || 'dark');
+      $('themeBtn').addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+      });
+
+      // Sync panel
+      $('syncBtn').addEventListener('click', () => {
+        $('syncPanel').classList.toggle('hidden');
+      });
+      $('exportJsonBtn').addEventListener('click', exportBackupJson);
+      $('importJsonBtn').addEventListener('click', () => $('importJsonFile').click());
+      $('importJsonFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) await importBackupJson(file);
+        e.target.value = '';
+      });
+      $('firebaseUrl').value = localStorage.getItem(KEYS.firebaseUrl) || '';
+      $('saveFirebaseUrl').addEventListener('click', () => {
+        const v = $('firebaseUrl').value.trim().replace(/\/$/, '');
+        if (v) {
+          localStorage.setItem(KEYS.firebaseUrl, v);
+          setSyncStatus('✅ 저장됨. 변경사항이 자동으로 동기화됩니다. 다른 기기에서도 같은 URL을 설정하세요.');
+        } else {
+          localStorage.removeItem(KEYS.firebaseUrl);
+          setSyncStatus('🔸 URL 미설정 — 자동 동기화 꺼짐.');
+        }
+      });
+      $('pullCloudBtn').addEventListener('click', pullFromCloud);
+      $('pushCloudBtn').addEventListener('click', pushToCloud);
+      if (getFirebaseUrl()) {
+        setSyncStatus('☁ 자동 동기화 활성화 — 클라우드에서 최신 데이터 가져오는 중...');
+        pullFromCloud();
+      } else {
+        setSyncStatus('🔸 자동 동기화 미설정. JSON 백업 또는 Firebase URL을 사용하세요.');
+      }
     }
 
     document.addEventListener('DOMContentLoaded', init);
