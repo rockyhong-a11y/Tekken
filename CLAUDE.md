@@ -8,7 +8,7 @@
 |---|---|---|
 | 🎮 게임 | [RAWG](https://rawg.io/apidocs) | 내장 기본키 (사용자 키 우선) |
 | 🎬 영화 | [TMDB](https://www.themoviedb.org/) | 내장 기본키 |
-| 📺 애니메이션 | [Jikan (MyAnimeList)](https://docs.api.jikan.moe/) | 불필요 |
+| 📺 애니메이션 | [TMDB (TV)](https://www.themoviedb.org/) | 내장 기본키 (영화와 공유) |
 
 ## Stack
 

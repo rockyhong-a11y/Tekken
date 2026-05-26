@@ -553,6 +553,80 @@
     }
     .game-card .card-actions .youtube:hover { background: #cc0029; }
 
+    /* === Media card (movie / anime) === */
+    .media-card .cover { position: relative; height: 160px; }
+    .media-card .cover.no-bg { background: var(--surface); height: auto; padding: 12px; }
+    .media-poster {
+      position: absolute;
+      bottom: -28px;
+      left: 12px;
+      width: 72px;
+      height: auto;
+      border-radius: 6px;
+      border: 2px solid var(--surface);
+      box-shadow: var(--shadow);
+      background: #000;
+    }
+    .media-card.status-cleared .cover { box-shadow: inset 0 -3px 0 var(--status-cleared); }
+    .media-card.status-playing .cover { box-shadow: inset 0 -3px 0 var(--status-playing); }
+    .media-card.status-planned .cover { box-shadow: inset 0 -3px 0 var(--status-planned); }
+    .media-card .body { padding-top: 38px; }
+
+    .credit-line {
+      font-size: 12px;
+      margin-bottom: 6px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .credit-line .credit-label {
+      color: var(--muted);
+      font-weight: 500;
+      margin-right: 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .credit-line a {
+      color: var(--text);
+      text-decoration: none;
+    }
+    .credit-line a:hover { color: var(--accent); }
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .cast-pill, .season-pill {
+      font-size: 11px;
+      padding: 3px 9px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      text-decoration: none;
+      transition: border-color 0.1s, color 0.1s;
+    }
+    .cast-pill:hover, .season-pill:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .season-pill {
+      background: rgba(124, 92, 255, 0.08);
+      border-color: rgba(124, 92, 255, 0.4);
+    }
+
+    .game-card .card-actions .trailer {
+      background: #ff0033;
+      color: white;
+    }
+    .game-card .card-actions .trailer:hover { background: #cc0029; }
+    .game-card .card-actions .tmdb-link {
+      background: #01b4e4;
+      color: white;
+    }
+    .game-card .card-actions .tmdb-link:hover { background: #0089b3; }
+
     .empty {
       text-align: center;
       color: var(--muted);
@@ -744,12 +818,19 @@
       anime: { cleared: '완주',      playing: '시청 중',   planned: '시청 예정' },
     };
 
-    // TMDB 영화 장르 ID → 한국어 매핑 (search 응답은 genre_ids만 반환)
+    // TMDB 장르 ID → 한국어 (search 응답은 genre_ids만 반환)
     const TMDB_GENRES_KO = {
       28: '액션', 12: '어드벤처', 16: '애니메이션', 35: '코미디', 80: '범죄',
       99: '다큐멘터리', 18: '드라마', 10751: '가족', 14: '판타지', 36: '역사',
       27: '공포', 10402: '음악', 9648: '미스터리', 10749: '로맨스',
       878: 'SF', 10770: 'TV영화', 53: '스릴러', 10752: '전쟁', 37: '서부',
+    };
+    const TMDB_TV_GENRES_KO = {
+      10759: '액션 & 어드벤처', 16: '애니메이션', 35: '코미디', 80: '범죄',
+      99: '다큐멘터리', 18: '드라마', 10751: '가족', 10762: '키즈',
+      9648: '미스터리', 10763: '뉴스', 10764: '리얼리티',
+      10765: 'SF & 판타지', 10766: '연속극', 10767: '토크',
+      10768: '전쟁 & 정치', 37: '서부',
     };
 
     let currentCategory = localStorage.getItem(KEYS.category) || 'game';
@@ -824,6 +905,7 @@
       currentProfile: null,
       games: [],
       screenshotsBuffer: [],
+      lastLookup: null,     // 직전 검색결과 클릭 시의 메타데이터 (cast/director/trailer 등)
     };
 
     // === Utilities ===
@@ -963,11 +1045,17 @@
       }
     }
 
-    // === TMDB (movies) ===
-    async function tmdbSearch(query) {
+    // === TMDB (movies + TV/anime) ===
+    const tmdbImg = (path, size) => path ? `https://image.tmdb.org/t/p/${size || 'w500'}${path}` : '';
+    const tmdbSiteUrl = (type, id) => `https://www.themoviedb.org/${type}/${id}?language=ko-KR`;
+    const tmdbPersonUrl = (id) => `https://www.themoviedb.org/person/${id}?language=ko-KR`;
+    const youtubeUrl = (key) => `https://www.youtube.com/watch?v=${key}`;
+
+    async function tmdbSearch(query, type) {
       const key = getTmdbKey();
       if (!key) return [];
-      const url = `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(query)}&language=ko-KR&page=1&include_adult=false`;
+      const t = type || 'movie';
+      const url = `https://api.themoviedb.org/3/search/${t}?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(query)}&language=ko-KR&page=1&include_adult=false`;
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`TMDB ${res.status}`);
@@ -978,39 +1066,68 @@
         return [];
       }
     }
-    async function tmdbDetail(id) {
+    async function tmdbDetail(id, type) {
       const key = getTmdbKey();
       if (!key) return null;
+      const t = type || 'movie';
       try {
-        const res = await fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${encodeURIComponent(key)}&language=ko-KR`);
+        const res = await fetch(`https://api.themoviedb.org/3/${t}/${id}?api_key=${encodeURIComponent(key)}&language=ko-KR&append_to_response=credits,videos`);
         if (!res.ok) throw new Error(`TMDB ${res.status}`);
         return await res.json();
       } catch { return null; }
     }
 
-    // === Jikan (MyAnimeList — anime) ===
-    async function jikanSearch(query) {
-      const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=20&order_by=popularity`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Jikan ${res.status}`);
-        const json = await res.json();
-        return json.data || [];
-      } catch (err) {
-        console.warn('Jikan 조회 실패:', err.message);
-        return [];
-      }
-    }
-    async function jikanDetail(id) {
-      try {
-        const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
-        if (!res.ok) throw new Error(`Jikan ${res.status}`);
-        const json = await res.json();
-        return json.data || null;
-      } catch { return null; }
+    // === 카테고리별 결과 → 통일된 형태로 정규화 ===
+    function normalizeMedia(raw, tmdbType) {
+      const isMovie = tmdbType === 'movie';
+      const title = isMovie ? (raw.title || raw.original_title || '') : (raw.name || raw.original_name || '');
+      const released = isMovie ? (raw.release_date || '') : (raw.first_air_date || '');
+      const poster = tmdbImg(raw.poster_path, 'w500');
+      const backdrop = tmdbImg(raw.backdrop_path, 'w780');
+
+      const credits = raw.credits || {};
+      const cast = (credits.cast || []).slice(0, 10).map((c) => ({
+        id: c.id, name: c.name, character: c.character || '',
+        profile: tmdbImg(c.profile_path, 'w185'),
+      }));
+      const directors = isMovie
+        ? (credits.crew || []).filter((c) => c.job === 'Director').map((c) => ({ id: c.id, name: c.name }))
+        : [];
+      const creators = !isMovie
+        ? (raw.created_by || []).map((c) => ({ id: c.id, name: c.name }))
+        : [];
+
+      const videos = (raw.videos && raw.videos.results) || [];
+      const trailerVid = videos.find((v) => v.site === 'YouTube' && v.type === 'Trailer')
+                      || videos.find((v) => v.site === 'YouTube' && v.type === 'Teaser')
+                      || videos.find((v) => v.site === 'YouTube');
+      const trailer = trailerVid ? youtubeUrl(trailerVid.key) : '';
+
+      const seasons = isMovie ? [] : (raw.seasons || [])
+        .filter((s) => s.season_number !== 0)
+        .map((s) => ({
+          season_number: s.season_number, name: s.name,
+          episode_count: s.episode_count || 0,
+          air_date: s.air_date || '',
+          poster: tmdbImg(s.poster_path, 'w185'),
+        }));
+
+      const genreMap = isMovie ? TMDB_GENRES_KO : TMDB_TV_GENRES_KO;
+      const genres = raw.genres
+        ? raw.genres.map((g) => g.name)
+        : (raw.genre_ids || []).map((id) => genreMap[id]).filter(Boolean);
+
+      return {
+        _id: raw.id, _raw: raw, _needsTranslation: false,
+        tmdb_id: raw.id, tmdb_type: tmdbType,
+        title, released, genres,
+        description: raw.overview || '',
+        poster, backdrop,
+        background_image: backdrop || poster,
+        directors, creators, cast, seasons, trailer,
+      };
     }
 
-    // === 카테고리별 결과 → 통일된 형태로 정규화 ===
     function normalizeItem(raw) {
       if (currentCategory === 'game') {
         return {
@@ -1022,54 +1139,35 @@
           background_image: raw.background_image || '',
         };
       }
-      if (currentCategory === 'movie') {
-        const cover = raw.poster_path ? `https://image.tmdb.org/t/p/w500${raw.poster_path}`
-                    : raw.backdrop_path ? `https://image.tmdb.org/t/p/w780${raw.backdrop_path}` : '';
-        const genres = raw.genres ? raw.genres.map((g) => g.name)
-                     : (raw.genre_ids || []).map((id) => TMDB_GENRES_KO[id]).filter(Boolean);
-        return {
-          _id: raw.id, _raw: raw, _needsTranslation: false,
-          title: raw.title || raw.original_title || '',
-          released: raw.release_date || '',
-          genres,
-          description: raw.overview || '',
-          background_image: cover,
-        };
-      }
-      if (currentCategory === 'anime') {
-        const cover = (raw.images && raw.images.jpg && (raw.images.jpg.large_image_url || raw.images.jpg.image_url)) || '';
-        return {
-          _id: raw.mal_id, _raw: raw, _needsTranslation: true,
-          title: raw.title || '',
-          released: (raw.aired && raw.aired.from) ? raw.aired.from.slice(0, 10) : '',
-          genres: (raw.genres || []).map((g) => translateGenre(g.name)),
-          description: raw.synopsis || '',
-          background_image: cover,
-        };
-      }
+      if (currentCategory === 'movie') return normalizeMedia(raw, 'movie');
+      if (currentCategory === 'anime') return normalizeMedia(raw, 'tv');
       return { _raw: raw, title: '', genres: [], description: '', background_image: '', released: '' };
     }
 
-    // 검색: 카테고리에 맞는 API 호출 + 정규화. 한글 쿼리는 RAWG/Jikan에 한해 영문 변환.
+    // 검색: 카테고리에 맞는 API 호출 + 정규화. 한글 쿼리는 RAWG에 한해 영문 변환.
     async function searchByCategory(query) {
       let raw = [];
       if (currentCategory === 'game') {
         const q = await toEnglish(query);
         raw = (await rawgSearch(q)) || [];
       } else if (currentCategory === 'movie') {
-        // TMDB는 한국어 쿼리·응답을 native 지원
-        raw = await tmdbSearch(query);
+        raw = await tmdbSearch(query, 'movie');
       } else if (currentCategory === 'anime') {
-        const q = await toEnglish(query);
-        raw = await jikanSearch(q);
+        raw = await tmdbSearch(query, 'tv');
       }
       return raw.map(normalizeItem);
     }
 
     async function detailByCategory(item) {
       if (currentCategory === 'game') return normalizeItem((await rawgDetail(item._id)) || item._raw);
-      if (currentCategory === 'movie') return normalizeItem((await tmdbDetail(item._id)) || item._raw);
-      if (currentCategory === 'anime') return normalizeItem((await jikanDetail(item._id)) || item._raw);
+      if (currentCategory === 'movie') {
+        const d = await tmdbDetail(item._id, 'movie');
+        return d ? normalizeMedia(d, 'movie') : item;
+      }
+      if (currentCategory === 'anime') {
+        const d = await tmdbDetail(item._id, 'tv');
+        return d ? normalizeMedia(d, 'tv') : item;
+      }
       return item;
     }
 
@@ -1102,6 +1200,7 @@
     }
 
     async function applyLookupToForm(item) {
+      state.lastLookup = item;     // cast/감독/예고편 등 풀 메타 저장 — 저장 시 합쳐서 영속화
       $('title').value = item.title || $('title').value;
       $('genres').value = (item.genres || []).join(', ');
       $('released').value = item.released || '';
@@ -1151,6 +1250,7 @@
       $('editingId').value = '';
       $('coverImage').value = '';
       state.screenshotsBuffer = [];
+      state.lastLookup = null;
       renderScreenshotPreview();
       $('lookupResults').innerHTML = '';
       $('submitBtn').textContent = '추가';
@@ -1158,9 +1258,12 @@
 
     function buildGameFromForm() {
       const id = $('editingId').value || uid();
+      const existing = id ? state.games.find((g) => g.id === id) : null;
+      const meta = state.lastLookup || existing || {};
       const title = $('title').value.trim();
       const genres = $('genres').value.split(',').map((g) => g.trim()).filter(Boolean);
-      return {
+
+      const base = {
         id,
         category: currentCategory,
         title,
@@ -1170,10 +1273,25 @@
         released: $('released').value.trim(),
         description: $('description').value.trim(),
         note: $('note').value.trim(),
-        background_image: $('coverImage').value || '',
+        background_image: $('coverImage').value || meta.background_image || '',
         screenshots: state.screenshotsBuffer.slice(),
-        createdAt: Date.now(),
+        createdAt: existing ? existing.createdAt : Date.now(),
       };
+
+      if (currentCategory === 'movie' || currentCategory === 'anime') {
+        Object.assign(base, {
+          tmdb_id: meta.tmdb_id || null,
+          tmdb_type: meta.tmdb_type || (currentCategory === 'anime' ? 'tv' : 'movie'),
+          poster: meta.poster || '',
+          backdrop: meta.backdrop || '',
+          directors: meta.directors || [],
+          creators: meta.creators || [],
+          cast: meta.cast || [],
+          seasons: meta.seasons || [],
+          trailer: meta.trailer || '',
+        });
+      }
+      return base;
     }
 
     function submitGame(e) {
@@ -1297,7 +1415,18 @@
       return `https://www.youtube.com/results?search_query=${q}`;
     }
 
+    // 리스트 뷰의 ▶ 버튼 — 영화/애니는 예고편, 게임은 공략 검색
+    function rowPlayLink(g) {
+      if ((g.category === 'movie' || g.category === 'anime') && g.trailer) {
+        return `<a class="youtube" href="${escapeHtml(g.trailer)}" target="_blank" rel="noreferrer noopener" title="예고편">▶</a>`;
+      }
+      if (g.category === 'movie' || g.category === 'anime') return '';
+      return `<a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener" title="유튜브 공략">▶</a>`;
+    }
+
     function gameCardHTML(g) {
+      if (g.category === 'movie' || g.category === 'anime') return mediaCardHTML(g);
+
       const shots = (g.screenshots || []).slice(0, 4).map((s, i) => `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
       const cover = g.background_image
         ? `<div class="cover" style="background-image:url('${g.background_image.replace(/'/g, "\\'")}')"></div>`
@@ -1309,7 +1438,7 @@
           <div class="body">
             <h3>${escapeHtml(g.title)}</h3>
             <div class="badges">
-              <span class="badge status-${g.status}">${statusLabel(g.status)}</span>
+              <span class="badge status-${g.status}">${statusLabel(g.status, 'game')}</span>
               ${g.platform ? `<span class="badge">${escapeHtml(g.platform)}</span>` : ''}
               ${genres}
             </div>
@@ -1321,6 +1450,83 @@
             ${shots ? `<div class="shots">${shots}</div>` : ''}
             <div class="card-actions">
               <a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener">▶ 공략</a>
+              <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
+              <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function mediaCardHTML(g) {
+      const cat = g.category;
+      const tmdbType = g.tmdb_type || (cat === 'anime' ? 'tv' : 'movie');
+      const tmdbPage = g.tmdb_id ? tmdbSiteUrl(tmdbType, g.tmdb_id) : '';
+
+      const hero = g.backdrop || g.poster || g.background_image;
+      const posterThumb = g.poster
+        ? `<img class="media-poster" src="${escapeHtml(g.poster)}" alt="" />`
+        : '';
+      const cover = hero
+        ? `<div class="cover" style="background-image:url('${hero.replace(/'/g, "\\'")}')">${posterThumb}</div>`
+        : (posterThumb ? `<div class="cover no-bg">${posterThumb}</div>` : '');
+
+      const genres = (g.genres || []).map((x) => `<span class="badge">${escapeHtml(x)}</span>`).join('');
+
+      const personLink = (p) => p.id
+        ? `<a href="${tmdbPersonUrl(p.id)}" target="_blank" rel="noreferrer noopener">${escapeHtml(p.name)}</a>`
+        : escapeHtml(p.name);
+      const directorsLine = (g.directors || []).length
+        ? `<div class="credit-line"><span class="credit-label">감독</span> ${(g.directors).map(personLink).join(', ')}</div>` : '';
+      const creatorsLine = (g.creators || []).length
+        ? `<div class="credit-line"><span class="credit-label">제작</span> ${(g.creators).map(personLink).join(', ')}</div>` : '';
+
+      const castPills = (g.cast || []).slice(0, 8).map((c) => {
+        const url = c.id ? tmdbPersonUrl(c.id) : '#';
+        const title = c.character ? `${c.name} — ${c.character}` : c.name;
+        return `<a class="cast-pill" href="${url}" target="_blank" rel="noreferrer noopener" title="${escapeHtml(title)}">${escapeHtml(c.name)}</a>`;
+      }).join('');
+      const castLine = castPills
+        ? `<div class="credit-line"><span class="credit-label">출연</span><div class="pill-list">${castPills}</div></div>` : '';
+
+      const seasonPills = (g.seasons || []).map((s) => {
+        const url = g.tmdb_id ? `${tmdbSiteUrl('tv', g.tmdb_id).replace('?language=ko-KR','')}/season/${s.season_number}?language=ko-KR` : '#';
+        const ep = s.episode_count ? ` · ${s.episode_count}화` : '';
+        const yr = s.air_date ? ` · ${s.air_date.slice(0,4)}` : '';
+        return `<a class="season-pill" href="${url}" target="_blank" rel="noreferrer noopener">시즌 ${s.season_number}${ep}${yr}</a>`;
+      }).join('');
+      const seasonsLine = seasonPills
+        ? `<div class="credit-line"><span class="credit-label">시즌</span><div class="pill-list">${seasonPills}</div></div>` : '';
+
+      const trailerBtn = g.trailer
+        ? `<a class="trailer" href="${escapeHtml(g.trailer)}" target="_blank" rel="noreferrer noopener">▶ 예고편</a>` : '';
+      const tmdbBtn = tmdbPage
+        ? `<a class="tmdb-link" href="${tmdbPage}" target="_blank" rel="noreferrer noopener">🔗 TMDB</a>` : '';
+
+      const shots = (g.screenshots || []).slice(0, 4).map((s, i) =>
+        `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
+
+      return `
+        <article class="game-card media-card status-${g.status}">
+          ${cover}
+          <div class="body">
+            <h3>${escapeHtml(g.title)}</h3>
+            <div class="badges">
+              <span class="badge status-${g.status}">${statusLabel(g.status, cat)}</span>
+              ${g.platform ? `<span class="badge">${escapeHtml(g.platform)}</span>` : ''}
+              ${genres}
+            </div>
+            ${g.released ? `<div class="info">📅 ${escapeHtml(g.released)}</div>` : ''}
+            ${g.description ? `<p class="desc">${escapeHtml(g.description)}</p>` : ''}
+            ${directorsLine}
+            ${creatorsLine}
+            ${castLine}
+            ${seasonsLine}
+            ${g.note ? `<p class="desc" style="color:#cbd0e0">📝 ${escapeHtml(g.note)}</p>` : ''}
+            ${shots ? `<div class="shots">${shots}</div>` : ''}
+            <div class="card-actions">
+              ${trailerBtn}
+              ${tmdbBtn}
               <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
               <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
             </div>
@@ -1383,13 +1589,13 @@
         return `
           <tr class="row-${g.status}">
             <td data-col="title"><span class="row-title">${thumb}${escapeHtml(g.title)}</span></td>
-            <td data-col="status"><span class="row-status status-${g.status}"></span>${statusLabel(g.status)}</td>
+            <td data-col="status"><span class="row-status status-${g.status}"></span>${statusLabel(g.status, g.category)}</td>
             <td data-col="platform">${escapeHtml(g.platform || '')}</td>
             <td data-col="genres">${escapeHtml(genres)}</td>
             <td data-col="released">${escapeHtml(g.released || '')}</td>
             <td data-col="createdAt">${created}</td>
             <td data-col="actions" class="row-actions">
-              <a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener" title="유튜브 공략">▶</a>
+              ${rowPlayLink(g)}
               <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
               <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
             </td>
