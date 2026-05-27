@@ -289,6 +289,30 @@
     .field label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--muted); }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+    /* 단일선택 버튼 그룹 (상태 / 플랫폼·매체) */
+    .choice-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .choice-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .choice-btn:hover { border-color: var(--accent); }
+    .choice-btn.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .choice-btn .choice-icon { font-size: 16px; line-height: 1; }
+
     .lookup-row { display: flex; gap: 8px; }
     .lookup-row input { flex: 1; }
 
@@ -1052,16 +1076,16 @@
           <div id="lookupResults" class="lookup-results"></div>
         </div>
 
-        <div class="grid-2">
-          <div class="field">
-            <label for="status">상태 *</label>
-            <select id="status" required></select>
-          </div>
+        <div class="field">
+          <label>상태 *</label>
+          <div id="statusGroup" class="choice-group"></div>
+          <input type="hidden" id="status" />
+        </div>
 
-          <div class="field">
-            <label for="platform" id="platformLabel">플랫폼 *</label>
-            <select id="platform" required></select>
-          </div>
+        <div class="field">
+          <label id="platformLabel">플랫폼 *</label>
+          <div id="platformGroup" class="choice-group"></div>
+          <input type="hidden" id="platform" />
         </div>
 
         <div class="grid-2">
@@ -1199,20 +1223,36 @@
       media: { titleLabel: '제목',   platformLabel: '시청 매체', releasedLabel: '공개일',
                formTitle: '새 영상 추가', placeholder: '영화 / TV 시리즈 / 애니 / 극장판 / OVA (자동 검색)' },
     };
-    const PLATFORMS = {
-      game: ['PC (Steam)','PC (Epic)','PC (GOG)','PC (Microsoft Store)',
-             'PlayStation 5','PlayStation 4','Xbox Series X|S','Xbox One',
-             'Nintendo Switch','Nintendo Switch 2','Steam Deck',
-             'iOS','Android','Arcade','기타'],
-      media: ['극장','Netflix','Disney+','Apple TV+','Amazon Prime',
-              'Watcha','티빙 (TVING)','웨이브 (Wavve)','쿠팡플레이',
-              '라프텔 (Laftel)','Crunchyroll',
-              'TV 방영','극장판','OVA',
-              'YouTube','Blu-ray / DVD','기타'],
+    // 단일선택 버튼용 플랫폼/매체 (값 + 아이콘 + 라벨)
+    const PLATFORM_OPTIONS = {
+      game: [
+        { value: 'PC',      icon: '💻', label: 'PC' },
+        { value: 'PS',      icon: '🎮', label: 'PS' },
+        { value: 'Switch',  icon: '🕹️', label: 'Switch' },
+        { value: 'Xbox',    icon: '❎', label: 'Xbox' },
+        { value: 'iOS',     icon: '🍎', label: 'iOS' },
+        { value: 'Android', icon: '🤖', label: 'Android' },
+      ],
+      media: [
+        { value: '극장',   icon: '🎬', label: '극장' },
+        { value: 'OTT',    icon: '📺', label: 'OTT' },
+        { value: '유튜브', icon: '▶️', label: '유튜브' },
+      ],
+    };
+    // 레거시 상세 플랫폼명 → 새 단일선택 값 매핑 (구 데이터 편집 시 선택 복원용)
+    const LEGACY_PLATFORM_MAP = {
+      'PC (Steam)':'PC','PC (Epic)':'PC','PC (GOG)':'PC','PC (Microsoft Store)':'PC','Steam Deck':'PC',
+      'PlayStation 5':'PS','PlayStation 4':'PS',
+      'Xbox Series X|S':'Xbox','Xbox One':'Xbox',
+      'Nintendo Switch':'Switch','Nintendo Switch 2':'Switch',
+      'Netflix':'OTT','Disney+':'OTT','Apple TV+':'OTT','Amazon Prime':'OTT','Watcha':'OTT',
+      '티빙 (TVING)':'OTT','웨이브 (Wavve)':'OTT','쿠팡플레이':'OTT','라프텔 (Laftel)':'OTT',
+      'Crunchyroll':'OTT','TV 방영':'OTT','OVA':'OTT','Blu-ray / DVD':'OTT',
+      'YouTube':'유튜브','극장판':'극장',
     };
     const STATUS_LABELS = {
-      game:  { cleared: '클리어',    playing: '플레이 중', planned: '플레이 예정' },
-      media: { cleared: '시청 완료', playing: '시청 중',   planned: '시청 예정' },
+      game:  { cleared: '엔딩',    playing: '플레이 중', planned: '플레이 예정' },
+      media: { cleared: '정주행',  playing: '시청 중',   planned: '시청 예정' },
     };
 
     // TMDB 장르 ID → 한국어 (search 응답은 genre_ids만 반환)
@@ -2013,6 +2053,9 @@
       $('gameForm').reset();
       $('editingId').value = '';
       $('coverImage').value = '';
+      $('status').value = 'planned';
+      $('platform').value = '';
+      renderChoiceGroups();
       state.screenshotsBuffer = [];
       state.lastLookup = null;
       renderScreenshotPreview();
@@ -2073,7 +2116,11 @@
         return;
       }
       const game = buildGameFromForm();
-      if (!game.title || !game.platform) return;
+      if (!game.title) { alert('제목을 입력하세요.'); return; }
+      if (!game.platform) {
+        alert(currentCategory === 'game' ? '플랫폼을 선택하세요.' : '시청 매체를 선택하세요.');
+        return;
+      }
 
       const editingId = $('editingId').value;
       if (editingId) {
@@ -2097,6 +2144,7 @@
       $('title').value = g.title;
       $('status').value = g.status;
       $('platform').value = g.platform;
+      renderChoiceGroups(); // 상태/플랫폼 버튼 선택 상태 반영 (레거시 값은 매핑)
       $('genres').value = (g.genres || []).join(', ');
       $('released').value = g.released || '';
       $('description').value = g.description || '';
@@ -2124,9 +2172,9 @@
       const planned = state.games.filter((g) => g.status === 'planned').length;
       $('stats').innerHTML = `
         <span class="stat-pill total">전체 ${state.games.length}</span>
-        <span class="stat-pill cleared">클리어 ${cleared}</span>
-        <span class="stat-pill playing">플레이 중 ${playing}</span>
-        <span class="stat-pill planned">예정 ${planned}</span>
+        <span class="stat-pill cleared">${escapeHtml(statusLabel('cleared'))} ${cleared}</span>
+        <span class="stat-pill playing">${escapeHtml(statusLabel('playing'))} ${playing}</span>
+        <span class="stat-pill planned">${escapeHtml(statusLabel('planned'))} ${planned}</span>
       `;
     }
 
@@ -2425,12 +2473,8 @@
       $('releasedLabel').textContent = c.releasedLabel;
       $('title').placeholder = c.placeholder;
 
-      // 상태 select 옵션 재구성
-      const statusSel = $('status');
-      const prevStatus = statusSel.value || 'planned';
-      statusSel.innerHTML = ['planned', 'playing', 'cleared']
-        .map((s) => `<option value="${s}">${statusLabel(s)}</option>`).join('');
-      statusSel.value = prevStatus;
+      // 상태·플랫폼 단일선택 버튼 그룹 재구성
+      renderChoiceGroups();
 
       // 필터 상태 select 재구성
       const fs = $('filterStatus');
@@ -2439,13 +2483,38 @@
         ['cleared', 'playing', 'planned']
           .map((s) => `<option value="${s}">${statusLabel(s)}</option>`).join('');
       fs.value = prevFs;
+    }
 
-      // 플랫폼 select 재구성
-      const platSel = $('platform');
-      const prevPlat = platSel.value;
-      platSel.innerHTML = '<option value="">선택하세요</option>' +
-        PLATFORMS[currentCategory].map((p) => `<option>${p}</option>`).join('');
-      if (PLATFORMS[currentCategory].includes(prevPlat)) platSel.value = prevPlat;
+    // 선택값을 hidden input에 반영하고 버튼 하이라이트 갱신
+    function setChoiceValue(inputId, value, group) {
+      $(inputId).value = value || '';
+      group.querySelectorAll('.choice-btn').forEach((b) => {
+        b.classList.toggle('selected', b.dataset.value === value);
+      });
+    }
+
+    // 상태/플랫폼 버튼 그룹을 현재 카테고리에 맞게 렌더 (선택값 유지)
+    function renderChoiceGroups() {
+      // 상태
+      const statusGroup = $('statusGroup');
+      const curStatus = $('status').value || 'planned';
+      statusGroup.innerHTML = ['planned', 'playing', 'cleared']
+        .map((s) => `<button type="button" class="choice-btn" data-value="${s}">${escapeHtml(statusLabel(s))}</button>`)
+        .join('');
+      setChoiceValue('status', curStatus, statusGroup);
+
+      // 플랫폼 / 시청 매체
+      const platGroup = $('platformGroup');
+      const opts = PLATFORM_OPTIONS[currentCategory] || [];
+      let curPlat = $('platform').value;
+      if (curPlat && !opts.some((o) => o.value === curPlat)) {
+        curPlat = LEGACY_PLATFORM_MAP[curPlat] || '';
+      }
+      platGroup.innerHTML = opts.map((o) =>
+        `<button type="button" class="choice-btn" data-value="${escapeHtml(o.value)}">` +
+        `<span class="choice-icon">${o.icon}</span>${escapeHtml(o.label)}</button>`
+      ).join('');
+      setChoiceValue('platform', opts.some((o) => o.value === curPlat) ? curPlat : '', platGroup);
     }
 
     function setCategory(cat) {
@@ -3011,6 +3080,15 @@
       // Form
       $('gameForm').addEventListener('submit', submitGame);
       $('resetBtn').addEventListener('click', resetForm);
+      // 상태/플랫폼 단일선택 버튼 그룹 클릭 처리 (이벤트 위임)
+      $('statusGroup').addEventListener('click', (e) => {
+        const btn = e.target.closest('.choice-btn');
+        if (btn) setChoiceValue('status', btn.dataset.value, $('statusGroup'));
+      });
+      $('platformGroup').addEventListener('click', (e) => {
+        const btn = e.target.closest('.choice-btn');
+        if (btn) setChoiceValue('platform', btn.dataset.value, $('platformGroup'));
+      });
       $('screenshots').addEventListener('change', async (e) => {
         await handleScreenshotInput(e.target.files);
         e.target.value = '';
