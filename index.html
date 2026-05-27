@@ -1252,6 +1252,7 @@
           </div>
           <button type="button" id="exportBtn">📥 엑셀 내보내기</button>
           <button type="button" id="steamImportBtn">🎮 Steam 가져오기</button>
+          <button type="button" id="enrichBtn">🔄 정보 보강</button>
           <input type="file" id="steamCsvInput" accept=".csv,.txt" style="display:none">
         </div>
       </div>
@@ -2654,6 +2655,7 @@
 
       // Steam 가져오기는 게임 탭에서만 표시
       $('steamImportBtn').classList.toggle('hidden', currentCategory !== 'game');
+      $('enrichBtn').classList.toggle('hidden', currentCategory !== 'game');
 
       // 필터 상태 select 재구성
       const fs = $('filterStatus');
@@ -2999,6 +3001,66 @@
       renderPlatformFilter();
       renderGenreFilter();
       renderList();
+    }
+
+    // 기존 게임 라이브러리 보강: 영문 장르 한글화 + 누락된 설명/이미지/슬러그를 RAWG에서 채움
+    let _enriching = false;
+    async function enrichExistingGames() {
+      if (_enriching) return;
+
+      const games = state.games.filter((g) => (g.category || 'game') === 'game');
+      if (!games.length) { alert('보강할 게임이 없습니다.'); return; }
+
+      // 1) 장르 한글화는 API 없이 즉시 처리 (idempotent)
+      games.forEach((g) => {
+        if (g.genres && g.genres.length) g.genres = g.genres.map((x) => translateGenre(x));
+      });
+
+      // 2) 설명/이미지/슬러그가 비어 있는 게임만 RAWG에서 보강
+      const need = games.filter((g) => !g.description || !g.background_image || !g.rawg_slug);
+
+      const btn = $('enrichBtn');
+      _enriching = true;
+      btn.disabled = true;
+
+      let updated = 0;
+      for (let i = 0; i < need.length; i++) {
+        const g = need[i];
+        btn.textContent = `보강 중… ${i + 1}/${need.length}`;
+        try {
+          let id = g.rawg_id;
+          let listItem = null;
+          if (!id) {
+            const results = await rawgSearch(g.title);
+            if (results && results.length) { listItem = results[0]; id = listItem.id; }
+          }
+          if (id) {
+            const detail = await rawgDetail(id);
+            const src = detail || listItem;
+            if (src) {
+              if (!g.background_image && src.background_image) g.background_image = src.background_image;
+              if (!g.rawg_slug && src.slug) g.rawg_slug = src.slug;
+              if (!g.rawg_id && src.id) g.rawg_id = src.id;
+              if ((!g.released || !g.released.length) && src.released) g.released = src.released;
+              if ((!g.genres || !g.genres.length) && src.genres) {
+                g.genres = src.genres.map((x) => translateGenre(x.name || x));
+              }
+              if (!g.description && detail) {
+                g.description = detail.description_raw || stripHtml(detail.description) || '';
+              }
+              updated++;
+            }
+          }
+        } catch (_) { /* 개별 실패는 건너뜀 */ }
+        if (i < need.length - 1) await new Promise((r) => setTimeout(r, 150));
+      }
+
+      saveGames();
+      renderAll();
+      _enriching = false;
+      btn.disabled = false;
+      btn.textContent = '🔄 정보 보강';
+      alert(`보강 완료: 장르 한글화 ${games.length}개 · RAWG 정보 ${updated}개 갱신`);
     }
 
     function openLightbox(src) {
@@ -3521,6 +3583,13 @@
 
       // Export
       $('exportBtn').addEventListener('click', exportToExcel);
+
+      // 기존 게임 정보 보강
+      $('enrichBtn').addEventListener('click', () => {
+        if (confirm('기존 게임의 장르를 한글화하고, 설명·이미지가 비어 있는 게임을 RAWG에서 다시 채웁니다. 계속할까요?')) {
+          enrichExistingGames();
+        }
+      });
 
       // Steam 가져오기
       $('steamImportBtn').addEventListener('click', () => $('steamCsvInput').click());
