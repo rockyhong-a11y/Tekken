@@ -1077,7 +1077,7 @@
           <ul>
             <li>오른쪽 <b>🃏 카드</b> / <b>📋 목록</b> 뷰를 자유롭게 전환할 수 있습니다.</li>
             <li>검색창과 상태/플랫폼/장르 필터로 빠르게 추려볼 수 있습니다.</li>
-            <li><b>📥 엑셀 내보내기</b>로 전체 데이터를 파일로 받을 수 있습니다.</li>
+            <li><b>📥 엑셀 내보내기</b>로 게임·영상을 각각 별도 시트(탭)에 담아 한 파일로 받을 수 있습니다.</li>
           </ul>
         </section>
         <section>
@@ -2646,9 +2646,9 @@
     // === Excel export (.xls via HTML-as-XLS, Excel opens natively) ===
     // 라이브러리 없이 단일 파일로 이미지·색상까지 담으려고 HTML 포맷을 .xls 확장자로 저장.
     // Excel은 application/vnd.ms-excel MIME과 <html><table> 조합을 스프레드시트로 인식.
+    // body 안의 <table> 순서대로 워크시트가 생성되므로 게임/영상을 분리해 두 시트로 내보낸다.
     function exportToExcel() {
-      if (!state.games.length) { alert('내보낼 게임이 없습니다.'); return; }
-      const games = sortedFiltered();
+      if (!state.games.length) { alert('내보낼 데이터가 없습니다.'); return; }
 
       const ROW_BG = {
         cleared: '#D7F2E1',
@@ -2660,22 +2660,27 @@
         playing: '#1E4FB4',
         planned: '#A04A0A',
       };
+      const CAT_LABEL = { game: '🎮 게임', movie: '🎬 영화', tv: '📺 TV/애니', anime: '📺 애니메이션' };
+      const IMG_W = 220; // 커버·스크린샷 셀 폭(px) — 이미지가 셀을 꽉 채우도록 통일
 
       const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-      const img = (src, w) => src ? `<img src="${src}" width="${w}" />` : '';
+      // 셀 폭에 맞춰 꽉 차게: 이미지 폭을 컬럼 폭과 동일하게 고정(높이는 비율 유지)
+      const cellImg = (src) => src ? `<img src="${src}" width="${IMG_W}" style="width:${IMG_W}px;height:auto;display:block" />` : '';
 
-      const CAT_LABEL = { game: '🎮 게임', movie: '🎬 영화', tv: '📺 TV/애니', anime: '📺 애니메이션' };
+      const isGameCat = (c) => (c || 'game') === 'game';
 
-      const rowsHtml = games.map((g) => {
+      const games = state.games.filter((g) => isGameCat(g.category));
+      const media = state.games.filter((g) => !isGameCat(g.category));
+
+      const rowHtml = (g) => {
+        const cat = g.category || 'game';
         const bg = ROW_BG[g.status] || '#FFFFFF';
         const fg = STATUS_FG[g.status] || '#222';
-        const cover = img(g.background_image, 140);
-        const shotsCount = (g.screenshots || []).length;
-        const shots = (g.screenshots || []).map((s) => img(s, 120)).join(' ');
+        const cover = cellImg(g.background_image || g.poster || g.backdrop);
+        const shots = (g.screenshots || []).map(cellImg).join('');
         const created = g.createdAt ? new Date(g.createdAt).toLocaleDateString('ko-KR') : '';
         const desc = esc(g.description || '').replace(/\n/g, '<br>');
         const note = esc(g.note || '').replace(/\n/g, '<br>');
-        const cat = g.category || 'game';
         return `
           <tr style="background-color:${bg}">
             <td>${esc(CAT_LABEL[cat] || cat)}</td>
@@ -2686,13 +2691,38 @@
             <td>${esc(g.released || '')}</td>
             <td style="min-width:320px">${desc}</td>
             <td style="min-width:200px">${note}</td>
-            <td>${cover}</td>
-            <td>${shotsCount}</td>
-            <td>${shots}</td>
+            <td style="width:${IMG_W}px">${cover}</td>
+            <td>${(g.screenshots || []).length}</td>
+            <td style="width:${IMG_W}px">${shots}</td>
             <td>${created}</td>
           </tr>
         `;
-      }).join('');
+      };
+
+      const sheetTable = (mediaLabel, list) => {
+        const platformHead = mediaLabel ? '시청 매체' : '플랫폼';
+        const rows = list.length
+          ? list.map(rowHtml).join('')
+          : '<tr><td colspan="12" style="text-align:center;color:#888">데이터 없음</td></tr>';
+        return '<table>' +
+          '<colgroup>' +
+          `<col><col><col><col><col><col><col><col>` +
+          `<col style="width:${IMG_W}px"><col><col style="width:${IMG_W}px"><col>` +
+          '</colgroup>' +
+          '<thead><tr>' +
+          `<th>분류</th><th>제목</th><th>상태</th><th>${platformHead}</th><th>장르</th>` +
+          '<th>발매일</th><th>설명</th><th>메모</th>' +
+          `<th>커버</th><th>스크린샷 수</th><th>스크린샷</th><th>등록일</th>` +
+          '</tr></thead>' +
+          `<tbody>${rows}</tbody>` +
+          '</table>';
+      };
+
+      const worksheetDecl = (name) =>
+        '<x:ExcelWorksheet>' +
+        `<x:Name>${esc(name)}</x:Name>` +
+        '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>' +
+        '</x:ExcelWorksheet>';
 
       const html =
 '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
@@ -2700,24 +2730,21 @@
 'xmlns="http://www.w3.org/TR/REC-html40">' +
 '<head><meta charset="UTF-8">' +
 '<!--[if gte mso 9]><xml>' +
-'<x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>' +
-`<x:Name>${esc(state.currentProfile || 'Library')}</x:Name>` +
-'<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>' +
-'</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>' +
+'<x:ExcelWorkbook><x:ExcelWorksheets>' +
+worksheetDecl('🎮 게임') +
+worksheetDecl('🎬 영상') +
+'</x:ExcelWorksheets></x:ExcelWorkbook>' +
 '</xml><![endif]-->' +
 '<style>' +
 'table{border-collapse:collapse;font-family:"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:12px}' +
-'th,td{border:1px solid #888;padding:6px 8px;vertical-align:top}' +
+'th,td{border:1px solid #888;padding:6px 8px;vertical-align:top;word-break:break-word;overflow:hidden}' +
 'th{background-color:#2A2F3F;color:white;font-weight:bold;text-align:left}' +
+'img{max-width:' + IMG_W + 'px}' +
 '</style></head><body>' +
-'<table>' +
-'<thead><tr>' +
-'<th>분류</th><th>제목</th><th>상태</th><th>플랫폼</th><th>장르</th>' +
-'<th>발매일</th><th>설명</th><th>메모</th>' +
-'<th>커버</th><th>스크린샷 수</th><th>스크린샷</th><th>등록일</th>' +
-'</tr></thead>' +
-`<tbody>${rowsHtml}</tbody>` +
-'</table></body></html>';
+sheetTable(false, games) +
+'<br/>' +
+sheetTable(true, media) +
+'</body></html>';
 
       // UTF-8 BOM으로 Excel 한글 자동 인식
       const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
@@ -2725,7 +2752,7 @@
       const a = document.createElement('a');
       a.href = url;
       const date = new Date().toISOString().slice(0, 10);
-      a.download = `game-library-${state.currentProfile}-${date}.xls`;
+      a.download = `archive-zero-${state.currentProfile}-${date}.xls`;
       document.body.appendChild(a);
       a.click();
       a.remove();
