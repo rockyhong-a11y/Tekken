@@ -2846,16 +2846,25 @@
       if (ok) hideLockScreen();
     }
 
-    function initGoogleSignIn() {
-      $('lockAuthLoading').textContent = '';
-      if (typeof google === 'undefined' || !google.accounts) {
-        $('lockAuthError').textContent = 'Google 로그인 스크립트를 불러오지 못했습니다.';
-        return;
-      }
+    function initGoogleSignIn(_retries) {
+      _retries = _retries || 0;
+      $('lockAuthError').textContent = '';
       if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('123456789')) {
         $('lockAuthError').textContent = 'GOOGLE_CLIENT_ID가 설정되지 않았습니다. HTML 상단의 주석을 참고해 설정해주세요.';
         return;
       }
+      // GIS 스크립트는 async 로드라 init() 시점엔 아직 준비 안 됐을 수 있다.
+      // google.accounts.id 가 생길 때까지 짧게 폴링하며 기다린다 (최대 ~10초).
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+        if (_retries > 100) {
+          $('lockAuthError').textContent = 'Google 로그인 스크립트를 불러오지 못했습니다. 네트워크 또는 광고 차단 확장프로그램을 확인해주세요.';
+          return;
+        }
+        $('lockAuthLoading').textContent = 'Google 로그인 준비 중...';
+        setTimeout(() => initGoogleSignIn(_retries + 1), 100);
+        return;
+      }
+      $('lockAuthLoading').textContent = '';
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async (response) => {
