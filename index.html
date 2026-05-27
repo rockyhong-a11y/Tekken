@@ -1154,6 +1154,8 @@
       data: (profile) => `gametracker:profile:${profile}`,
       pin: (profile) => `gametracker:pin:${profile}`,
       localUpdatedAt: (profile) => `gametracker:localUpdatedAt:${profile}`,
+      refreshToken: 'archivezero:refreshToken',
+      authUid: 'archivezero:uid',
     };
 
     // === Profile PIN (4-digit) ===
@@ -1171,6 +1173,19 @@
     //   예: 'https://my-tracker-default-rtdb.firebaseio.com'
     //   비워두면 사용자가 ☁ 패널에서 직접 입력해야 합니다.
     const DEFAULT_FIREBASE_URL = 'https://life-tracker-rocky-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+    // ============================================================
+    // Firebase Authentication 설정
+    // ============================================================
+    // FIREBASE_WEB_API_KEY:
+    //   Firebase Console → 프로젝트 설정 → 일반 → 웹 API 키
+    // GOOGLE_CLIENT_ID:
+    //   Firebase Console → Authentication → Sign-in method
+    //   → Google → 웹 SDK 구성 → 웹 클라이언트 ID
+    // ============================================================
+    const FIREBASE_WEB_API_KEY = 'AIzaSyBzxxxxxxxxxxxxxxxxxxxxxxxxxxx'; // TODO: 위 주석 참고해 입력
+    const GOOGLE_CLIENT_ID = '123456789-xxxx.apps.googleusercontent.com'; // TODO: 위 주석 참고해 입력
+    // ============================================================
 
     const getRawgKey = () => localStorage.getItem(KEYS.rawgKey) || DEFAULT_RAWG_KEY;
     const getTmdbKey = () => localStorage.getItem(KEYS.tmdbKey) || DEFAULT_TMDB_KEY;
@@ -1292,15 +1307,126 @@
       currentProfile: null,
       games: [],
       screenshotsBuffer: [],
-      lastLookup: null,     // 직전 검색결과 클릭 시의 메타데이터 (cast/director/trailer 등)
-      _pinUnlocked: null,   // 세션 동안 잠금 해제된 PIN
-      _suppressPull: false, // 새 프로필 직후 의도치 않은 클라우드 데이터 유입 차단
-      _pendingPush: null,   // 디바운스된 push가 미처리 상태일 때 resolve를 보관
+      lastLookup: null,       // 직전 검색결과 클릭 시의 메타데이터 (cast/director/trailer 등)
+      _pinUnlocked: null,     // 세션 동안 잠금 해제된 PIN
+      _suppressPull: false,   // 새 프로필 직후 의도치 않은 클라우드 데이터 유입 차단
+      // Firebase Auth
+      uid: null,              // Firebase user ID
+      idToken: null,          // Firebase ID token (short-lived, ~1h)
+      refreshToken: null,     // Firebase refresh token (long-lived)
+      userDisplayName: null,
+      userEmail: null,
+      userPhoto: null,
     };
 
     // === Utilities ===
     const $ = (id) => document.getElementById(id);
-    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const localUid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+    // === DB path helper ===
+    function userDbBase() {
+      return `${getFirebaseUrl()}/users/${state.uid}`;
+    }
+
+    // === Firebase Auth ===
+
+    async function signInWithGoogleCredential(googleIdToken) {
+      if (!FIREBASE_WEB_API_KEY || FIREBASE_WEB_API_KEY.startsWith('AIzaSyBzx')) {
+        $('lockAuthError').textContent = 'FIREBASE_WEB_API_KEY가 설정되지 않았습니다. HTML 상단의 주석을 참고해 설정해주세요.';
+        return false;
+      }
+      try {
+        const res = await fetch(
+          `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${FIREBASE_WEB_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requestUri: window.location.href,
+              postBody: `id_token=${googleIdToken}&providerId=google.com`,
+              returnSecureToken: true,
+            }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          const msg = (data.error && data.error.message) || `HTTP ${res.status}`;
+          $('lockAuthError').textContent = `로그인 실패: ${msg}`;
+          return false;
+        }
+        state.uid = data.localId;
+        state.idToken = data.idToken;
+        state.refreshToken = data.refreshToken;
+        state.userDisplayName = data.displayName || '';
+        state.userEmail = data.email || '';
+        state.userPhoto = data.photoUrl || '';
+        localStorage.setItem(KEYS.refreshToken, data.refreshToken);
+        localStorage.setItem(KEYS.authUid, data.localId);
+        return true;
+      } catch (err) {
+        $('lockAuthError').textContent = `로그인 오류: ${err.message}`;
+        return false;
+      }
+    }
+
+    async function refreshAuthToken() {
+      const storedRefreshToken = localStorage.getItem(KEYS.refreshToken);
+      if (!storedRefreshToken) return false;
+      if (!FIREBASE_WEB_API_KEY || FIREBASE_WEB_API_KEY.startsWith('AIzaSyBzx')) return false;
+      try {
+        const res = await fetch(
+          `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_WEB_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: storedRefreshToken }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok || data.error) return false;
+        state.idToken = data.id_token;
+        state.refreshToken = data.refresh_token;
+        localStorage.setItem(KEYS.refreshToken, data.refresh_token);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function signOut() {
+      localStorage.removeItem(KEYS.refreshToken);
+      localStorage.removeItem(KEYS.authUid);
+      state.uid = null;
+      state.idToken = null;
+      state.refreshToken = null;
+      state.userDisplayName = null;
+      state.userEmail = null;
+      state.userPhoto = null;
+      state.currentProfile = null;
+      state._pinUnlocked = null;
+      state.profiles = [];
+      state.games = [];
+      if (typeof google !== 'undefined' && google.accounts) {
+        try { google.accounts.id.disableAutoSelect(); } catch {}
+      }
+      showLockScreen();
+    }
+
+    async function authFetch(url, options) {
+      if (!state.uid || !state.idToken) return null;
+      const sep = url.includes('?') ? '&' : '?';
+      const authedUrl = `${url}${sep}auth=${state.idToken}`;
+      let res;
+      try { res = await fetch(authedUrl, options); } catch { return null; }
+      if (res.status === 401) {
+        const ok = await refreshAuthToken();
+        if (!ok) { signOut(); return null; }
+        const sep2 = url.includes('?') ? '&' : '?';
+        try { res = await fetch(`${url}${sep2}auth=${state.idToken}`, options); } catch { return null; }
+        if (res.status === 401) { signOut(); return null; }
+      }
+      return res;
+    }
 
     function loadProfiles() {
       const raw = localStorage.getItem(KEYS.profiles);
@@ -1379,11 +1505,12 @@
     // 클라우드의 /profiles 컬렉션에서 프로필 이름 목록을 가져온다
     // (shallow=true 옵션으로 키만 받아 데이터 본문은 받지 않음)
     async function fetchCloudProfileNames() {
+      if (!state.uid || !state.idToken) return null;
       const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
       if (!base) return null;
       try {
-        const res = await fetch(`${base}/profiles.json?shallow=true`, { cache: 'no-store' });
-        if (!res.ok) return null;
+        const res = await authFetch(`${userDbBase()}/profiles.json?shallow=true`, { cache: 'no-store' });
+        if (!res || !res.ok) return null;
         const data = await res.json();
         if (data && typeof data === 'object') return Object.keys(data);
       } catch {}
@@ -1393,6 +1520,7 @@
     // 클라우드의 프로필 목록을 단일 진실의 원천(SSOT)으로 사용해 로컬 목록을 교체.
     // 클라우드가 비어 있으면 로컬도 비우고, 네트워크 오류면 로컬을 유지한다.
     async function syncProfileListFromCloud() {
+      if (!state.uid) return false;
       const names = await fetchCloudProfileNames();
       if (names === null) return false; // 클라우드 도달 실패 — 로컬 유지
       state.profiles = names;
@@ -1407,11 +1535,12 @@
     // 클라우드에 저장된 최신 PIN을 가져와 로컬에 반영. PIN 필드만 조회해
     // 게임 데이터까지 전송받는 일을 피한다.
     async function fetchCloudPin(name) {
+      if (!state.uid || !state.idToken) return getProfilePin(name);
       const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
       if (!base) return getProfilePin(name);
       try {
-        const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}/pin.json`, { cache: 'no-store' });
-        if (res.ok) {
+        const res = await authFetch(`${userDbBase()}/profiles/${encodeURIComponent(name)}/pin.json`, { cache: 'no-store' });
+        if (res && res.ok) {
           const pin = await res.json();
           if (typeof pin === 'string' && pin) {
             setProfilePin(name, pin);
@@ -1424,15 +1553,16 @@
 
     // PIN 필드만 부분 갱신 (PATCH) — games 등 다른 필드에는 영향이 없다.
     async function pushPinToCloud(name, pin) {
+      if (!state.uid || !state.idToken) return false;
       const base = (typeof getFirebaseUrl === 'function') ? getFirebaseUrl() : null;
       if (!base || !name) return false;
       try {
-        const res = await fetch(`${base}/profiles/${encodeURIComponent(name)}.json`, {
+        const res = await authFetch(`${userDbBase()}/profiles/${encodeURIComponent(name)}.json`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pin: pin || '' }),
         });
-        return res.ok;
+        return res && res.ok;
       } catch { return false; }
     }
 
@@ -1443,12 +1573,7 @@
 
       if (!skipPinCheck) {
         const pin = await fetchCloudPin(name);
-        if (!pin) {
-          alert(`"${name}" 프로필에 비밀번호가 설정되어 있지 않습니다. 잠금화면에서 다시 설정해주세요.`);
-          showLockScreen();
-          return;
-        }
-        if (pin !== state._pinUnlocked) {
+        if (pin && pin !== state._pinUnlocked) {
           const entered = prompt(`🔒 "${name}" 프로필 비밀번호 (4자리):`);
           if (entered !== pin) {
             if (entered !== null) alert('비밀번호가 일치하지 않습니다.');
@@ -1477,7 +1602,8 @@
         alert('이미 존재하는 프로필 이름입니다.');
         return false;
       }
-      if (!pin || !/^\d{4}$/.test(pin)) {
+      pin = (pin || '').trim();
+      if (pin && !/^\d{4}$/.test(pin)) {
         alert('비밀번호는 4자리 숫자여야 합니다.');
         return false;
       }
@@ -1512,18 +1638,18 @@
         if (cur === null) return;
         if (cur !== existing) { alert('비밀번호가 일치하지 않습니다.'); return; }
       }
-      const next = prompt('새 비밀번호 (4자리):');
+      const next = prompt('새 비밀번호 (4자리). 해제하려면 비워두고 확인:');
       if (next === null) return;
-      if (!/^\d{4}$/.test(next)) {
-        alert('비밀번호는 4자리 숫자여야 합니다.');
+      if (next && !/^\d{4}$/.test(next)) {
+        alert('4자리 숫자만 가능합니다.');
         return;
       }
       setProfilePin(state.currentProfile, next);
-      state._pinUnlocked = next; // 변경 후 재입력 안 받게
+      state._pinUnlocked = next || null; // 변경 후 재입력 안 받게
       // 클라우드에도 즉시 반영 (PIN 필드만 PATCH로 갱신해 games 등 다른
       // 필드에 영향 주지 않음)
       if (getFirebaseUrl()) pushPinToCloud(state.currentProfile, next);
-      alert('비밀번호가 변경되었습니다.');
+      alert(next ? '비밀번호가 변경되었습니다.' : '비밀번호가 해제되었습니다.');
     }
 
     async function renameCurrentProfile() {
@@ -1569,12 +1695,12 @@
       refreshProfileSelect();
 
       // 클라우드에서도 이름 변경 (새 경로에 푸시 → 옛 경로 삭제)
-      if (getFirebaseUrl && getFirebaseUrl()) {
+      if (getFirebaseUrl && getFirebaseUrl() && state.uid && state.idToken) {
         state._suppressPull = true;
         try {
           await pushToCloud();
           try {
-            await fetch(`${getFirebaseUrl()}/profiles/${encodeURIComponent(oldName)}.json`, { method: 'DELETE' });
+            await authFetch(`${userDbBase()}/profiles/${encodeURIComponent(oldName)}.json`, { method: 'DELETE' });
           } catch {}
         } finally {
           state._suppressPull = false;
@@ -1598,9 +1724,9 @@
       state.profiles = state.profiles.filter((p) => p !== removed);
       saveProfiles(state.profiles);
       // 클라우드에서도 해당 프로필 삭제
-      if (getFirebaseUrl && getFirebaseUrl()) {
+      if (getFirebaseUrl && getFirebaseUrl() && state.uid && state.idToken) {
         try {
-          await fetch(`${getFirebaseUrl()}/profiles/${encodeURIComponent(removed)}.json`, { method: 'DELETE' });
+          await authFetch(`${userDbBase()}/profiles/${encodeURIComponent(removed)}.json`, { method: 'DELETE' });
         } catch {}
       }
       state._pinUnlocked = null;
@@ -1877,7 +2003,7 @@
     }
 
     function buildGameFromForm() {
-      const id = $('editingId').value || uid();
+      const id = $('editingId').value || localUid();
       const existing = id ? state.games.find((g) => g.id === id) : null;
       const meta = state.lastLookup || existing || {};
       const title = $('title').value.trim();
@@ -2493,11 +2619,12 @@
     async function pushToCloud() {
       const base = getFirebaseUrl();
       if (!base || !state.currentProfile) return false;
+      if (!state.uid || !state.idToken) return false;
       const profile = state.currentProfile;
-      const endpoint = `${base}/profiles/${encodeURIComponent(profile)}.json`;
+      const endpoint = `${userDbBase()}/profiles/${encodeURIComponent(profile)}.json`;
       const updatedAt = Date.now();
       try {
-        const res = await fetch(endpoint, {
+        const res = await authFetch(endpoint, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2506,7 +2633,7 @@
             games: state.games,
           }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'null'}`);
         state._lastPushedAt = updatedAt;
         setSyncStatus('☁ 보냄 ' + new Date().toLocaleTimeString('ko-KR'));
         return true;
@@ -2519,14 +2646,15 @@
     async function pullFromCloud() {
       const base = getFirebaseUrl();
       if (!base || !state.currentProfile) return false;
+      if (!state.uid || !state.idToken) return false;
       if (state._suppressPull) return false;
       // 보류 중인 로컬 변경이 있으면 먼저 푸시해서 클라우드 데이터에 의해
       // 덮어쓰여지는 일이 없도록 함 (삭제한 항목이 되살아나는 이슈 방지)
       await flushPendingPush();
-      const endpoint = `${base}/profiles/${encodeURIComponent(state.currentProfile)}.json`;
+      const endpoint = `${userDbBase()}/profiles/${encodeURIComponent(state.currentProfile)}.json`;
       try {
-        const res = await fetch(endpoint, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await authFetch(endpoint, { cache: 'no-store' });
+        if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'null'}`);
         const data = await res.json();
         if (data && Array.isArray(data.games)) {
           // 로컬이 더 최신이면 클라우드로 덮어쓴다 (삭제 등 로컬 변경 보존)
@@ -2583,19 +2711,45 @@
     // === Lock screen ===
     let lockSelectedProfile = null;
 
+    function showAuthView() {
+      $('lockAuthView').classList.remove('hidden');
+      $('lockUserBar').classList.add('hidden');
+      $('lockProfileView').classList.add('hidden');
+      $('lockPinView').classList.add('hidden');
+      $('lockCreateView').classList.add('hidden');
+    }
+
     function showLockScreen() {
       lockSelectedProfile = null;
       $('lockScreen').classList.remove('hidden');
       $('lockScreen').setAttribute('aria-hidden', 'false');
-      $('lockProfileView').classList.remove('hidden');
       $('lockPinView').classList.add('hidden');
       $('lockCreateView').classList.add('hidden');
       $('lockPinInput').value = '';
       $('lockError').textContent = '';
-      renderLockProfiles();
-      // 다른 기기에서 만든 프로필이 있을 수 있으니 클라우드에서 목록을 가져와 병합
-      if (typeof getFirebaseUrl === 'function' && getFirebaseUrl()) {
+
+      if (state.uid && state.idToken) {
+        // 인증된 상태: 사용자 바 + 프로필 목록 표시
+        $('lockAuthView').classList.add('hidden');
+        $('lockUserBar').classList.remove('hidden');
+        $('lockProfileView').classList.remove('hidden');
+        // 사용자 바 정보 채우기
+        const photo = $('lockUserPhoto');
+        if (state.userPhoto) {
+          photo.src = state.userPhoto;
+          photo.style.display = '';
+        } else {
+          photo.src = '';
+          photo.style.display = 'none';
+        }
+        $('lockUserName').textContent = state.userDisplayName || '';
+        $('lockUserEmail').textContent = state.userEmail || '';
+        renderLockProfiles();
+        // 다른 기기에서 만든 프로필이 있을 수 있으니 클라우드에서 목록을 가져와 병합
         syncProfileListFromCloud();
+      } else {
+        // 미인증: Google 로그인 화면 표시
+        showAuthView();
       }
     }
 
@@ -2618,7 +2772,8 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'lock-profile';
-        btn.innerHTML = `${escapeHtml(p)}<span class="lock-profile-meta">🔒 비밀번호 필요</span>`;
+        const pinStatus = getProfilePin(p) ? '🔒 비밀번호 필요' : '→ 바로 입력';
+        btn.innerHTML = `${escapeHtml(p)}<span class="lock-profile-meta">${pinStatus}</span>`;
         btn.addEventListener('click', () => openPinView(p));
         list.appendChild(btn);
       });
@@ -2626,28 +2781,26 @@
 
     async function openPinView(name) {
       lockSelectedProfile = name;
+      // 클라우드에서 최신 PIN 상태 조회 (다른 기기에서 만든 프로필도 처리)
+      const cloudPin = await fetchCloudPin(name);
+      if (lockSelectedProfile !== name) return; // 그새 다른 프로필 선택됨
+
+      // PIN이 없으면 바로 입장
+      if (!cloudPin) {
+        await switchProfile(name, { skipPinCheck: true });
+        hideLockScreen();
+        return;
+      }
+
       $('lockPinName').textContent = name;
       $('lockProfileView').classList.add('hidden');
       $('lockCreateView').classList.add('hidden');
       $('lockPinView').classList.remove('hidden');
       $('lockPinInput').value = '';
       $('lockError').textContent = '';
-      // 클라우드에서 PIN을 받기 전 우선 로컬 캐시 기준으로 안내
-      const localHas = !!getProfilePin(name);
-      $('lockPinHint').textContent = localHas
-        ? '4자리 비밀번호를 입력하세요'
-        : '확인 중...';
+      $('lockPinHint').textContent = '4자리 비밀번호를 입력하세요';
       $('lockEnterBtn').textContent = '잠금 해제';
       setTimeout(() => $('lockPinInput').focus(), 0);
-      // 클라우드에서 최신 상태를 조회해 안내 메시지를 보정 (다른 기기에서
-      // 만든 프로필이면 로컬엔 PIN이 없지만 클라우드엔 있다)
-      const cloudPin = await fetchCloudPin(name);
-      if (lockSelectedProfile !== name) return; // 그새 다른 프로필 선택됨
-      const hasPin = !!cloudPin;
-      $('lockPinHint').textContent = hasPin
-        ? '4자리 비밀번호를 입력하세요'
-        : '비밀번호가 설정되어 있지 않습니다. 새로 설정해주세요.';
-      $('lockEnterBtn').textContent = hasPin ? '잠금 해제' : '비밀번호 설정 후 시작';
     }
 
     async function submitLockPin() {
@@ -2667,14 +2820,6 @@
           return;
         }
         state._pinUnlocked = existing;
-      } else {
-        // PIN 미설정 프로필 마이그레이션: 입력한 4자리를 PIN으로 설정하고
-        // 클라우드에도 즉시 반영 (다른 기기에서도 사용할 수 있게)
-        setProfilePin(name, entered);
-        state._pinUnlocked = entered;
-        if (getFirebaseUrl && getFirebaseUrl()) {
-          await pushPinToCloud(name, entered);
-        }
       }
       await switchProfile(name, { skipPinCheck: true });
       hideLockScreen();
@@ -2696,16 +2841,43 @@
       const errEl = $('lockCreateError');
       if (!name) { errEl.textContent = '프로필 이름을 입력하세요.'; return; }
       if (state.profiles.includes(name)) { errEl.textContent = '이미 존재하는 프로필 이름입니다.'; return; }
-      if (!/^\d{4}$/.test(pin)) { errEl.textContent = '비밀번호는 4자리 숫자여야 합니다.'; return; }
+      if (pin && !/^\d{4}$/.test(pin)) { errEl.textContent = '비밀번호는 4자리 숫자여야 합니다.'; return; }
       const ok = createProfile(name, pin);
       if (ok) hideLockScreen();
     }
 
+    function initGoogleSignIn() {
+      $('lockAuthLoading').textContent = '';
+      if (typeof google === 'undefined' || !google.accounts) {
+        $('lockAuthError').textContent = 'Google 로그인 스크립트를 불러오지 못했습니다.';
+        return;
+      }
+      if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('123456789')) {
+        $('lockAuthError').textContent = 'GOOGLE_CLIENT_ID가 설정되지 않았습니다. HTML 상단의 주석을 참고해 설정해주세요.';
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          $('lockAuthLoading').textContent = '로그인 중...';
+          $('lockAuthError').textContent = '';
+          const ok = await signInWithGoogleCredential(response.credential);
+          if (ok) {
+            $('lockAuthLoading').textContent = '';
+            showLockScreen();
+          }
+        },
+        auto_select: true,
+      });
+      google.accounts.id.renderButton($('googleSignInBtn'), {
+        theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko', width: 320,
+      });
+      google.accounts.id.prompt();
+    }
+
     function init() {
-      // 프로필 목록은 클라우드를 단일 진실의 원천으로 사용한다. 클라우드 URL이
-      // 설정되어 있으면 잠금화면에서 클라우드를 받아 로컬을 갱신하므로,
-      // 여기서는 빈 상태로 시작해 레거시 "기본 프로필" 같은 잔존 항목을 자동 정리.
-      state.profiles = getFirebaseUrl() ? [] : loadProfiles();
+      // 프로필 목록은 인증 후 클라우드에서 가져온다. 미인증 상태에서는 빈 배열.
+      state.profiles = [];
 
       refreshProfileSelect();
 
@@ -2738,6 +2910,10 @@
       $('lockCreateConfirmBtn').addEventListener('click', submitLockCreate);
       $('lockCreatePin').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') submitLockCreate();
+      });
+      $('lockSignOutBtn').addEventListener('click', signOut);
+      $('signOutBtn').addEventListener('click', () => {
+        if (confirm('로그아웃하시겠습니까?')) signOut();
       });
 
       // Category tabs
@@ -2848,8 +3024,25 @@
       document.addEventListener('visibilitychange', refreshIfActive);
       window.addEventListener('focus', refreshIfActive);
 
-      // 앱 시작 시 항상 잠금화면을 먼저 보여준다 (프로필 선택 + 비밀번호 입력)
-      showLockScreen();
+      // 앱 시작 시 항상 잠금화면을 먼저 보여준다
+      // 저장된 refresh token이 있으면 자동 로그인 시도, 없으면 Google 로그인 화면
+      const storedRefreshToken = localStorage.getItem(KEYS.refreshToken);
+      if (storedRefreshToken && FIREBASE_WEB_API_KEY && !FIREBASE_WEB_API_KEY.startsWith('AIzaSyBzx')) {
+        $('lockAuthLoading').textContent = '자동 로그인 중...';
+        showLockScreen(); // 미인증 상태이므로 lockAuthView가 보임 (스피너 표시)
+        refreshAuthToken().then(ok => {
+          if (ok) {
+            state.uid = localStorage.getItem(KEYS.authUid) || state.uid;
+            showLockScreen(); // 인증 완료 후 프로필 뷰 표시
+          } else {
+            initGoogleSignIn();
+            showLockScreen();
+          }
+        });
+      } else {
+        showLockScreen();
+        initGoogleSignIn();
+      }
     }
 
     document.addEventListener('DOMContentLoaded', init);
