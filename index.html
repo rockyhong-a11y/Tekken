@@ -2282,6 +2282,7 @@
             ${shots ? `<div class="shots">${shots}</div>` : ''}
             <div class="card-actions">
               <a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener">▶ 공략</a>
+              ${g._raw && g._raw.slug ? `<a class="tmdb-link" href="https://rawg.io/games/${encodeURIComponent(g._raw.slug)}" target="_blank" rel="noreferrer noopener">🔗 더보기</a>` : ''}
               <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
               <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
             </div>
@@ -2333,7 +2334,7 @@
       const trailerBtn = g.trailer
         ? `<a class="trailer" href="${escapeHtml(g.trailer)}" target="_blank" rel="noreferrer noopener">▶ 예고편</a>` : '';
       const tmdbBtn = tmdbPage
-        ? `<a class="tmdb-link" href="${tmdbPage}" target="_blank" rel="noreferrer noopener">🔗 TMDB</a>` : '';
+        ? `<a class="tmdb-link" href="${tmdbPage}" target="_blank" rel="noreferrer noopener">🔗 더보기</a>` : '';
 
       const shots = (g.screenshots || []).slice(0, 4).map((s, i) =>
         `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
