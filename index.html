@@ -95,6 +95,39 @@
     }
     .profile-bar label { font-size: 13px; color: var(--muted); }
 
+    .profile-menu-wrap { position: relative; }
+    .profile-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 180px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 6px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .profile-dropdown .menu-item {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 14px;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .profile-dropdown .menu-item:hover { background: var(--surface-2); }
+    .profile-dropdown .menu-item.danger { color: #ef4444; }
+    .profile-dropdown .menu-item.danger:hover { background: rgba(239,68,68,0.1); }
+    .menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
     main {
       display: grid;
       grid-template-columns: minmax(320px, 420px) 1fr;
@@ -116,8 +149,9 @@
       .profile-bar { width: 100%; gap: 6px; }
       .profile-bar label { display: none; }
       .profile-bar select { flex: 1; min-width: 0; }
-      .profile-bar button { padding: 7px 10px; font-size: 12px; }
+      .profile-bar > button, .profile-bar .profile-menu-wrap > button { padding: 7px 10px; font-size: 12px; }
       .profile-bar #themeBtn { padding: 7px 9px; font-size: 14px; }
+      .profile-dropdown { right: 0; left: auto; min-width: 160px; }
 
       main { padding: 12px; gap: 14px; }
       .form-card, .library { padding: 14px; }
@@ -995,12 +1029,20 @@
     <div class="profile-bar">
       <label for="profileSelect">프로필</label>
       <select id="profileSelect"></select>
-      <button id="newProfileBtn" type="button" class="ghost">＋ 새 프로필</button>
-      <button id="renameProfileBtn" type="button" class="ghost" title="프로필 이름 변경">✎</button>
-      <button id="pinBtn" type="button" class="ghost" title="비밀번호 설정">🔒</button>
-      <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
+      <div class="profile-menu-wrap">
+        <button id="profileMenuBtn" type="button" class="ghost" title="프로필 메뉴">👤 ▾</button>
+        <div id="profileDropdown" class="profile-dropdown hidden">
+          <button id="newProfileBtn" type="button" class="menu-item">＋ 새 프로필</button>
+          <div class="menu-sep"></div>
+          <button id="renameProfileBtn" type="button" class="menu-item">✎ 이름 변경</button>
+          <button id="pinBtn" type="button" class="menu-item">🔒 비밀번호 설정</button>
+          <div class="menu-sep"></div>
+          <button id="deleteProfileBtn" type="button" class="menu-item danger">🗑 프로필 삭제</button>
+          <div class="menu-sep"></div>
+          <button id="signOutBtn" type="button" class="menu-item">👋 로그아웃</button>
+        </div>
+      </div>
       <button id="helpBtn" type="button" class="ghost" title="사용 방법">?</button>
-      <button id="signOutBtn" type="button" class="ghost" title="로그아웃">👤</button>
       <button id="themeBtn" type="button" class="ghost" title="테마 전환">🌙</button>
     </div>
   </header>
@@ -3120,6 +3162,20 @@
         if (e.key === 'Enter') submitLockCreate();
       });
       $('lockSignOutBtn').addEventListener('click', signOut);
+      // 프로필 드롭다운 메뉴
+      const profileDropdown = $('profileDropdown');
+      $('profileMenuBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (!profileDropdown.contains(e.target)) profileDropdown.classList.add('hidden');
+      });
+      // 메뉴 항목 클릭 후 드롭다운 닫기
+      profileDropdown.querySelectorAll('.menu-item').forEach((item) => {
+        item.addEventListener('click', () => profileDropdown.classList.add('hidden'));
+      });
+
       $('signOutBtn').addEventListener('click', () => {
         if (confirm('로그아웃하시겠습니까?')) signOut();
       });
