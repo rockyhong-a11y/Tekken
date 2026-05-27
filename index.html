@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Archive Zero</title>
+  <!-- Google Identity Services (GIS) — Google Sign-In -->
+  <script src="https://accounts.google.com/gsi/client" async></script>
   <style>
     :root, :root[data-theme="dark"] {
       --bg: #0f1117;
@@ -807,6 +809,44 @@
       min-height: 18px;
     }
 
+    /* === Auth / user bar === */
+    .lock-user-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+    .lock-user-photo {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .lock-user-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .lock-user-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lock-user-email {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     /* === Help modal === */
     .help-modal {
       position: fixed;
@@ -874,7 +914,25 @@
       <h1>📁 Archive Zero</h1>
       <p class="lock-subtitle" id="lockSubtitle">나만의 기록이 시작되는 베이스캠프<br />(Game, Movie, Animation)</p>
 
-      <div id="lockProfileView">
+      <!-- shown when not signed in -->
+      <div id="lockAuthView" class="lock-pin-section">
+        <p class="lock-pin-hint">Google 계정으로 로그인하세요</p>
+        <div id="googleSignInBtn" style="display:flex;justify-content:center;margin:8px 0"></div>
+        <p id="lockAuthLoading" class="muted" style="text-align:center;font-size:13px"></p>
+        <p id="lockAuthError" class="lock-error"></p>
+      </div>
+
+      <!-- user info bar: shown in profile/pin/create views when authenticated -->
+      <div id="lockUserBar" class="lock-user-bar hidden">
+        <img id="lockUserPhoto" src="" alt="" class="lock-user-photo" />
+        <div class="lock-user-info">
+          <span id="lockUserName" class="lock-user-name"></span>
+          <span id="lockUserEmail" class="lock-user-email"></span>
+        </div>
+        <button type="button" id="lockSignOutBtn" class="ghost" style="margin-left:auto;font-size:12px">로그아웃</button>
+      </div>
+
+      <div id="lockProfileView" class="hidden">
         <div id="lockProfileList" class="lock-profile-list"></div>
         <div class="lock-actions">
           <button type="button" id="lockNewProfileBtn">＋ 새 프로필 만들기</button>
@@ -893,9 +951,9 @@
       </div>
 
       <div id="lockCreateView" class="lock-pin-section hidden">
-        <p class="lock-pin-hint">새 프로필 이름과 4자리 비밀번호를 입력하세요</p>
+        <p class="lock-pin-hint">새 프로필 이름을 입력하세요</p>
         <input type="text" id="lockCreateName" class="lock-pin-input" style="font-size:16px;letter-spacing:normal;text-align:left" placeholder="프로필 이름" autocomplete="off" />
-        <input type="password" id="lockCreatePin" class="lock-pin-input" maxlength="4" inputmode="numeric" placeholder="4자리 비밀번호" autocomplete="off" />
+        <input type="password" id="lockCreatePin" class="lock-pin-input" maxlength="4" inputmode="numeric" placeholder="4자리 비밀번호 (선택)" autocomplete="off" />
         <p id="lockCreateError" class="lock-error"></p>
         <div class="lock-actions">
           <button type="button" id="lockCreateCancelBtn" class="ghost">← 취소</button>
@@ -918,6 +976,7 @@
       <button id="pinBtn" type="button" class="ghost" title="비밀번호 설정">🔒</button>
       <button id="deleteProfileBtn" type="button" class="ghost danger">프로필 삭제</button>
       <button id="helpBtn" type="button" class="ghost" title="사용 방법">?</button>
+      <button id="signOutBtn" type="button" class="ghost" title="로그아웃">👤</button>
       <button id="themeBtn" type="button" class="ghost" title="테마 전환">🌙</button>
     </div>
   </header>
@@ -932,9 +991,10 @@
         <section>
           <h3>1. 시작하기</h3>
           <ul>
-            <li>앱 시작 시 잠금화면에서 프로필을 선택하고 4자리 비밀번호를 입력하세요.</li>
-            <li>처음이라면 <b>＋ 새 프로필 만들기</b>로 이름과 4자리 비밀번호를 정해 만드세요.</li>
-            <li>같은 프로필 이름과 비밀번호로 다른 기기에서도 그대로 진입할 수 있습니다.</li>
+            <li>앱 시작 시 <b>Google 계정으로 로그인</b>하세요. 재방문 시 자동 로그인됩니다.</li>
+            <li>로그인 후 프로필 목록이 표시됩니다. 처음이라면 <b>＋ 새 프로필 만들기</b>로 프로필을 만드세요.</li>
+            <li>각 프로필에 선택적으로 4자리 PIN을 설정할 수 있습니다 (설정하지 않으면 바로 입장).</li>
+            <li>다른 기기에서도 같은 Google 계정으로 로그인하면 동일한 프로필과 라이브러리를 볼 수 있습니다.</li>
           </ul>
         </section>
         <section>
@@ -957,18 +1017,20 @@
         <section>
           <h3>4. 프로필 관리 (헤더 버튼)</h3>
           <ul>
-            <li><b>＋ 새 프로필</b>: 새 프로필을 만듭니다. 비밀번호 필수.</li>
+            <li><b>＋ 새 프로필</b>: 새 프로필을 만듭니다. PIN은 선택 사항입니다.</li>
             <li><b>✎</b>: 현재 프로필의 이름을 변경합니다.</li>
-            <li><b>🔒</b>: 현재 프로필의 비밀번호를 변경합니다.</li>
+            <li><b>🔒</b>: 현재 프로필의 PIN을 설정·변경·해제합니다.</li>
             <li><b>프로필 삭제</b>: 현재 프로필과 모든 데이터를 영구 삭제합니다.</li>
+            <li><b>👤</b>: Google 계정에서 로그아웃합니다.</li>
             <li><b>🌙 / ☀️</b>: 다크/라이트 테마를 전환합니다.</li>
           </ul>
         </section>
         <section>
           <h3>5. 동기화</h3>
           <ul>
-            <li>모든 데이터는 클라우드에 자동 저장됩니다 — 별도 설정 필요 없음.</li>
-            <li>같은 프로필 이름 + 비밀번호로 다른 기기에서 진입하면 동일한 라이브러리가 보입니다.</li>
+            <li>모든 데이터는 Firebase Realtime DB에 자동 저장됩니다 — 별도 설정 필요 없음.</li>
+            <li>Google 계정으로 로그인하면 자신의 데이터만 볼 수 있으며, 다른 사용자의 데이터는 완전히 격리됩니다.</li>
+            <li>다른 기기에서 같은 Google 계정으로 로그인하면 동일한 프로필과 라이브러리가 보입니다.</li>
             <li>항목 추가/수정/삭제 시 잠시 후 자동으로 클라우드에 반영됩니다.</li>
           </ul>
         </section>
