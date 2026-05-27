@@ -1028,7 +1028,6 @@
         <section>
           <h3>5. 동기화</h3>
           <ul>
-            <li>모든 데이터는 Firebase Realtime DB에 자동 저장됩니다 — 별도 설정 필요 없음.</li>
             <li>Google 계정으로 로그인하면 자신의 데이터만 볼 수 있으며, 다른 사용자의 데이터는 완전히 격리됩니다.</li>
             <li>다른 기기에서 같은 Google 계정으로 로그인하면 동일한 프로필과 라이브러리가 보입니다.</li>
             <li>항목 추가/수정/삭제 시 잠시 후 자동으로 클라우드에 반영됩니다.</li>
@@ -1318,6 +1317,7 @@
       userDisplayName: null,
       userEmail: null,
       userPhoto: null,
+      _pendingAutoEnter: false, // 로그인 직후 1개 프로필 자동 입장용 1회성 플래그
     };
 
     // === Utilities ===
@@ -1539,6 +1539,13 @@
       refreshProfileSelect();
       if (!$('lockScreen').classList.contains('hidden')) {
         renderLockProfiles();
+      }
+      // 로그인 직후 1회: 프로필이 정확히 1개면 선택 화면 없이 자동 입장
+      if (state._pendingAutoEnter) {
+        state._pendingAutoEnter = false;
+        if (state.profiles.length === 1) {
+          openPinView(state.profiles[0]); // PIN 있으면 PIN 화면, 없으면 바로 입장
+        }
       }
       return true;
     }
@@ -2884,6 +2891,7 @@
           const ok = await signInWithGoogleCredential(response.credential);
           if (ok) {
             $('lockAuthLoading').textContent = '';
+            state._pendingAutoEnter = true; // 프로필 1개면 자동 입장
             showLockScreen();
           }
         },
@@ -3083,6 +3091,7 @@
               state.userEmail = p.email || '';
               state.userPhoto = p.photo || '';
             } catch {}
+            state._pendingAutoEnter = true; // 프로필 1개면 자동 입장
             showLockScreen(); // 인증 완료 후 프로필 뷰 표시
           } else {
             initGoogleSignIn();
