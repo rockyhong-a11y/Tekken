@@ -1234,8 +1234,8 @@
         { value: 'Android', icon: '🤖', label: 'Android' },
       ],
       media: [
-        { value: '극장',   icon: '🎬', label: '극장' },
         { value: 'OTT',    icon: '📺', label: 'OTT' },
+        { value: '극장',   icon: '🎬', label: '극장' },
         { value: '유튜브', icon: '▶️', label: '유튜브' },
       ],
     };
@@ -2053,8 +2053,8 @@
       $('gameForm').reset();
       $('editingId').value = '';
       $('coverImage').value = '';
-      $('status').value = 'planned';
-      $('platform').value = '';
+      $('status').value = 'cleared';
+      $('platform').value = ''; // renderChoiceGroups가 카테고리 기본값(PC/OTT)으로 채움
       renderChoiceGroups();
       state.screenshotsBuffer = [];
       state.lastLookup = null;
@@ -2495,21 +2495,22 @@
 
     // 상태/플랫폼 버튼 그룹을 현재 카테고리에 맞게 렌더 (선택값 유지)
     function renderChoiceGroups() {
-      // 상태
+      // 상태 — 순서: 엔딩(cleared) → 플레이 중/시청 중(playing) → 예정(planned), 기본 cleared
       const statusGroup = $('statusGroup');
-      const curStatus = $('status').value || 'planned';
-      statusGroup.innerHTML = ['planned', 'playing', 'cleared']
+      const curStatus = $('status').value || 'cleared';
+      statusGroup.innerHTML = ['cleared', 'playing', 'planned']
         .map((s) => `<button type="button" class="choice-btn" data-value="${s}">${escapeHtml(statusLabel(s))}</button>`)
         .join('');
       setChoiceValue('status', curStatus, statusGroup);
 
-      // 플랫폼 / 시청 매체
+      // 플랫폼 / 시청 매체 — 값이 없으면 첫 옵션(게임=PC, 영상=OTT)을 기본 선택
       const platGroup = $('platformGroup');
       const opts = PLATFORM_OPTIONS[currentCategory] || [];
       let curPlat = $('platform').value;
       if (curPlat && !opts.some((o) => o.value === curPlat)) {
         curPlat = LEGACY_PLATFORM_MAP[curPlat] || '';
       }
+      if (!curPlat) curPlat = (opts[0] || {}).value || '';
       platGroup.innerHTML = opts.map((o) =>
         `<button type="button" class="choice-btn" data-value="${escapeHtml(o.value)}">` +
         `<span class="choice-icon">${o.icon}</span>${escapeHtml(o.label)}</button>`
