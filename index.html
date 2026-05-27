@@ -905,6 +905,33 @@
       text-overflow: ellipsis;
     }
 
+    /* === Steam import modal === */
+    .steam-import-list {
+      max-height: 320px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .steam-import-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .steam-import-row:last-child { border-bottom: none; }
+    .steam-import-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .steam-import-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
     /* === Help modal === */
     .help-modal {
       position: fixed;
@@ -1046,6 +1073,24 @@
       <button id="themeBtn" type="button" class="ghost" title="테마 전환">🌙</button>
     </div>
   </header>
+
+  <!-- Steam import modal -->
+  <div id="steamImportModal" class="help-modal hidden" aria-hidden="true">
+    <div class="help-card" role="dialog" aria-labelledby="steamImportTitle" style="max-width:520px">
+      <div class="help-header">
+        <h2 id="steamImportTitle">🎮 Steam 가져오기</h2>
+        <button type="button" id="steamImportCloseBtn" class="ghost" aria-label="닫기">✕</button>
+      </div>
+      <div class="help-body" style="padding:16px 20px">
+        <p id="steamImportSummary" class="muted" style="margin:0 0 12px"></p>
+        <div id="steamImportList" class="steam-import-list"></div>
+      </div>
+      <div class="steam-import-footer">
+        <button type="button" id="steamImportCancelBtn" class="ghost">취소</button>
+        <button type="button" id="steamImportConfirmBtn">추가하기</button>
+      </div>
+    </div>
+  </div>
 
   <div id="helpModal" class="help-modal hidden" aria-hidden="true">
     <div class="help-card" role="dialog" aria-labelledby="helpTitle">
@@ -1192,6 +1237,8 @@
             <button type="button" data-view="list">📋 목록</button>
           </div>
           <button type="button" id="exportBtn">📥 엑셀 내보내기</button>
+          <button type="button" id="steamImportBtn">🎮 Steam 가져오기</button>
+          <input type="file" id="steamCsvInput" accept=".csv,.txt" style="display:none">
         </div>
       </div>
 
@@ -2581,6 +2628,9 @@
       // 상태·플랫폼 단일선택 버튼 그룹 재구성
       renderChoiceGroups();
 
+      // Steam 가져오기는 게임 탭에서만 표시
+      $('steamImportBtn').classList.toggle('hidden', currentCategory !== 'game');
+
       // 필터 상태 select 재구성
       const fs = $('filterStatus');
       const prevFs = fs.value || 'all';
@@ -2732,6 +2782,186 @@
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+    }
+
+    // === Steam DB CSV 가져오기 ===
+    // SteamDB 포맷: {제목}{시간당₩}₩ {정가}{플레이타임}{리뷰%}
+    // 정가와 플레이타임이 구분자 없이 붙어있어(예: 1650075.5h = 정가16500 + 75.5h)
+    // 뒤에서 제거하는 방식은 실패함 → 앞에서 앵커 패턴으로 제목을 추출한다.
+    // 데모/베타/테스트 필터
+    function _isSteamNonGame(title) {
+      return /\b(demo|beta|test|playtest|prologue|trial|sampler)\b/i.test(title) ||
+             /\s(demo|beta|test|playtest|prologue|trial)$/i.test(title);
+    }
+
+    function parseSteamDbCsv(text) {
+      const rawLines = text.replace(/\r/g, '').split('\n');
+
+      // 포맷 자동 감지: ₩ 기호가 있으면 rich format (SteamDB 통계 CSV), 없으면 단순 제목 목록
+      const hasRich = rawLines.some((l) => l.includes('₩'));
+
+      if (!hasRich) {
+        // 단순 제목 목록: "{숫자}\t{제목}" 형식
+        const results = [];
+        const seen = new Set();
+        for (const raw of rawLines) {
+          const title = raw.replace(/^\d+\t/, '').replace(/^"|"$/g, '').trim();
+          if (!title || /^-+$/.test(title)) continue;
+          if (_isSteamNonGame(title)) continue;
+          const k = title.toLowerCase();
+          if (seen.has(k)) continue;
+          seen.add(k);
+          results.push({ title, status: 'planned' });
+        }
+        return results;
+      }
+
+      // Rich format (₩ 가격 포함)
+      // "(Not in Store)" 등 2행짜리 항목을 이전 행에 합산
+      const merged = [];
+      for (const raw of rawLines) {
+        const clean = raw.replace(/^\d+\t/, '').replace(/^"|"$/g, '').trim();
+        if (/^\(/.test(clean) && merged.length > 0) {
+          merged[merged.length - 1] += clean.replace(/^\([^)]+\)/, '');
+        } else {
+          merged.push(raw);
+        }
+      }
+
+      const results = [];
+      for (const raw of merged) {
+        const s = raw.replace(/^\d+\t/, '').replace(/^"|"$/g, '').trim();
+        if (!s || /^-+$/.test(s)) continue;
+
+        const hasPlaytime = /[\d.]+h|\d+m/.test(s);
+        const status = hasPlaytime ? 'playing' : 'planned';
+
+        let title = null;
+
+        // 유료 게임: 시간당 가격은 항상 소수점 있음 (예: 218.59₩)
+        const m1 = s.match(/^(.{3,}?)[\d,]+\.\d+₩/);
+        if (m1) title = m1[1].trim();
+
+        if (!title) { const m = s.match(/^(.*?)-Free/); if (m) title = m[1].trim(); }
+        if (!title) { const m = s.match(/^(.*?)-No Price/); if (m) title = m[1].trim(); }
+        if (!title) { const m = s.match(/^(.*?)-₩/); if (m) title = m[1].trim(); }
+        if (!title) { const m = s.match(/^(.*?)-Not in Store/); if (m) title = m[1].trim(); }
+
+        if (!title) continue;
+        if (_isSteamNonGame(title)) continue;
+        results.push({ title, status });
+      }
+
+      const seen = new Set();
+      return results.filter(({ title }) => {
+        const k = title.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+
+    let _steamPending = [];
+
+    function openSteamImportModal(parsed) {
+      const inLib = new Set(state.games.map((g) => g.title.toLowerCase()));
+      const toAdd = parsed.filter((g) => !inLib.has(g.title.toLowerCase()));
+      const skipped = parsed.length - toAdd.length;
+      _steamPending = toAdd;
+
+      const summary = $('steamImportSummary');
+      summary.textContent = `총 ${parsed.length}개 중 ${toAdd.length}개 추가 예정` +
+        (skipped > 0 ? ` (이미 등록된 ${skipped}개 제외)` : '');
+
+      const PREVIEW_MAX = 300;
+      const rows = toAdd.slice(0, PREVIEW_MAX).map((g) =>
+        `<div class="steam-import-row">` +
+        `<span class="steam-import-title">${escapeHtml(g.title)}</span>` +
+        `<span class="badge status-${g.status}">${statusLabel(g.status, 'game')}</span>` +
+        `</div>`
+      ).join('');
+      const more = toAdd.length > PREVIEW_MAX
+        ? `<p class="muted" style="padding:8px 12px">…외 ${toAdd.length - PREVIEW_MAX}개</p>` : '';
+      $('steamImportList').innerHTML = rows + more;
+
+      const btn = $('steamImportConfirmBtn');
+      btn.textContent = toAdd.length ? `${toAdd.length}개 추가` : '추가할 게임 없음';
+      btn.disabled = toAdd.length === 0;
+      $('steamImportModal').classList.remove('hidden');
+      $('steamImportModal').removeAttribute('aria-hidden');
+    }
+
+    function closeSteamImportModal() {
+      $('steamImportModal').classList.add('hidden');
+      $('steamImportModal').setAttribute('aria-hidden', 'true');
+      _steamPending = [];
+      _steamImportDone = false;
+      $('steamImportConfirmBtn').textContent = '추가하기';
+    }
+
+    let _steamImportDone = false;
+
+    async function executeSteamImport() {
+      if (_steamImportDone) {
+        _steamImportDone = false;
+        $('steamImportConfirmBtn').textContent = '추가하기';
+        closeSteamImportModal();
+        return;
+      }
+      if (!_steamPending.length) return;
+
+      const confirmBtn = $('steamImportConfirmBtn');
+      const cancelBtn = $('steamImportCancelBtn');
+      const closeBtn = $('steamImportCloseBtn');
+      const summary = $('steamImportSummary');
+      confirmBtn.disabled = true;
+      cancelBtn.disabled = true;
+      closeBtn.disabled = true;
+
+      const total = _steamPending.length;
+      const now = Date.now();
+      const newGames = [];
+
+      for (let i = 0; i < total; i++) {
+        const g = _steamPending[i];
+        summary.textContent = `RAWG 조회 중… ${i + 1} / ${total}`;
+
+        let rawgData = null;
+        try {
+          const results = await rawgSearch(g.title);
+          if (results && results.length) rawgData = results[0];
+        } catch (_) { /* 실패 시 제목만으로 추가 */ }
+
+        newGames.push({
+          id: localUid(),
+          category: 'game',
+          title: rawgData ? rawgData.name : g.title,
+          status: g.status,
+          platform: 'PC',
+          genres: rawgData ? (rawgData.genres || []).map((x) => x.name) : [],
+          released: rawgData ? (rawgData.released || '') : '',
+          description: '',
+          note: '',
+          background_image: rawgData ? (rawgData.background_image || '') : '',
+          screenshots: [],
+          rawg_slug: rawgData ? (rawgData.slug || '') : '',
+          rawg_id: rawgData ? (rawgData.id || null) : null,
+          createdAt: now + i,
+        });
+
+        if (i < total - 1) await new Promise((r) => setTimeout(r, 150));
+      }
+
+      state.games.push(...newGames);
+      saveGames();
+      renderAll();
+
+      summary.textContent = `${newGames.length}개 게임을 추가했습니다.`;
+      _steamImportDone = true;
+      confirmBtn.textContent = '닫기';
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      closeBtn.disabled = false;
     }
 
     function renderAll() {
@@ -3261,6 +3491,27 @@
 
       // Export
       $('exportBtn').addEventListener('click', exportToExcel);
+
+      // Steam 가져오기
+      $('steamImportBtn').addEventListener('click', () => $('steamCsvInput').click());
+      $('steamCsvInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const parsed = parseSteamDbCsv(ev.target.result);
+          if (!parsed.length) {
+            alert('게임을 찾을 수 없습니다.\nSteamDB 라이브러리 페이지에서 내보낸 파일인지 확인하세요.');
+            return;
+          }
+          openSteamImportModal(parsed);
+        };
+        reader.readAsText(file, 'utf-8');
+        e.target.value = '';
+      });
+      $('steamImportCloseBtn').addEventListener('click', closeSteamImportModal);
+      $('steamImportCancelBtn').addEventListener('click', closeSteamImportModal);
+      $('steamImportConfirmBtn').addEventListener('click', executeSteamImport);
 
       // Theme toggle
       applyTheme(localStorage.getItem(KEYS.theme) || 'dark');
