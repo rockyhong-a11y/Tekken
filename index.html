@@ -2093,6 +2093,11 @@
         createdAt: existing ? existing.createdAt : Date.now(),
       };
 
+      if (itemCategory === 'game') {
+        base.rawg_slug = (meta._raw && meta._raw.slug) || existing?.rawg_slug || '';
+        base.rawg_id = meta._id || (meta._raw && meta._raw.id) || existing?.rawg_id || null;
+      }
+
       if (itemCategory === 'movie' || itemCategory === 'tv') {
         Object.assign(base, {
           tmdb_id: meta.tmdb_id || null,
@@ -2256,6 +2261,13 @@
       return parts.join('');
     }
 
+    // RAWG 상세 페이지 URL — slug 우선, 없으면 제목 검색으로 폴백
+    function rawgPageUrl(g) {
+      if (g.rawg_slug) return `https://rawg.io/games/${encodeURIComponent(g.rawg_slug)}`;
+      if (g.title) return `https://rawg.io/search?query=${encodeURIComponent(g.title)}`;
+      return '';
+    }
+
     function gameCardHTML(g) {
       if (g.category === 'movie' || g.category === 'tv' || g.category === 'anime') return mediaCardHTML(g);
 
@@ -2282,7 +2294,7 @@
             ${shots ? `<div class="shots">${shots}</div>` : ''}
             <div class="card-actions">
               <a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener">▶ 공략</a>
-              ${g._raw && g._raw.slug ? `<a class="tmdb-link" href="https://rawg.io/games/${encodeURIComponent(g._raw.slug)}" target="_blank" rel="noreferrer noopener">🔗 더보기</a>` : ''}
+              ${rawgPageUrl(g) ? `<a class="tmdb-link" href="${rawgPageUrl(g)}" target="_blank" rel="noreferrer noopener">🔗 더보기</a>` : ''}
               <button type="button" class="ghost" data-action="edit" data-id="${g.id}">수정</button>
               <button type="button" class="ghost danger" data-action="delete" data-id="${g.id}">삭제</button>
             </div>
