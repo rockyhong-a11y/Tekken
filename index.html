@@ -1126,7 +1126,20 @@
           </ul>
         </section>
         <section>
-          <h3>4. 프로필 관리 (헤더 버튼)</h3>
+          <h3>4. Steam 라이브러리 가져오기</h3>
+          <ul>
+            <li>Steam에서 보유한 게임 목록을 한 번에 불러올 수 있습니다 (게임 탭의 <b>🎮 Steam 가져오기</b> 버튼).</li>
+            <li><b>① </b><a href="https://steamdb.info/calculator/" target="_blank" rel="noopener">steamdb.info/calculator</a>에 접속합니다.</li>
+            <li><b>② </b><b>Sign in via Steam</b>을 눌러 Steam 계정으로 로그인합니다.</li>
+            <li><b>③ </b><b>View your profile</b>을 클릭합니다.</li>
+            <li><b>④ </b>아래로 스크롤해 게임 목록을 드래그한 뒤 엑셀(또는 스프레드시트)에 붙여넣습니다.</li>
+            <li><b>⑤ </b>게임명 열만 남기고 나머지 열은 삭제한 후 <b>CSV</b>(또는 텍스트)로 저장합니다.</li>
+            <li><b>⑥ </b><b>🎮 Steam 가져오기</b> 버튼으로 저장한 파일을 업로드합니다.</li>
+            <li><b>⑦ </b>RAWG에서 장르·발매일·이미지를 자동으로 채워 라이브러리에 추가됩니다. 데모·베타·테스트 항목과 이미 등록된 게임은 자동 제외됩니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>5. 프로필 관리 (헤더 버튼)</h3>
           <ul>
             <li><b>＋ 새 프로필</b>: 새 프로필을 만듭니다. PIN은 선택 사항입니다.</li>
             <li><b>✎</b>: 현재 프로필의 이름을 변경합니다.</li>
@@ -1137,7 +1150,7 @@
           </ul>
         </section>
         <section>
-          <h3>5. 동기화</h3>
+          <h3>6. 동기화</h3>
           <ul>
             <li>Google 계정으로 로그인하면 자신의 데이터만 볼 수 있으며, 다른 사용자의 데이터는 완전히 격리됩니다.</li>
             <li>다른 기기에서 같은 Google 계정으로 로그인하면 동일한 프로필과 라이브러리가 보입니다.</li>
@@ -2303,13 +2316,23 @@
       `;
     }
 
+    // 현재 카테고리(게임/영상)에 속한 항목만 추림 — 필터 옵션 구성용
+    function categoryGames() {
+      return state.games.filter((g) => {
+        const itemCat = g.category || 'game';
+        if (currentCategory === 'game') return itemCat === 'game';
+        return itemCat !== 'game';
+      });
+    }
+
     function renderPlatformFilter() {
       const sel = $('filterPlatform');
       const current = sel.value || 'all';
-      const platforms = Array.from(new Set(state.games.map((g) => g.platform).filter(Boolean))).sort();
-      sel.innerHTML = '<option value="all">전체 플랫폼</option>' +
+      const allLabel = currentCategory === 'game' ? '전체 플랫폼' : '전체 매체';
+      const platforms = Array.from(new Set(categoryGames().map((g) => g.platform).filter(Boolean))).sort();
+      sel.innerHTML = `<option value="all">${allLabel}</option>` +
         platforms.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
-      if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+      sel.value = [...sel.options].some((o) => o.value === current) ? current : 'all';
     }
 
     // === View / sort state ===
@@ -2686,11 +2709,11 @@
       const sel = $('filterGenre');
       const current = sel.value || 'all';
       const genres = new Set();
-      state.games.forEach((g) => (g.genres || []).forEach((x) => x && genres.add(x)));
+      categoryGames().forEach((g) => (g.genres || []).forEach((x) => x && genres.add(x)));
       const list = [...genres].sort();
       sel.innerHTML = '<option value="all">전체 장르</option>' +
         list.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
-      if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+      sel.value = [...sel.options].some((o) => o.value === current) ? current : 'all';
     }
 
     // === Excel export (.xls via HTML-as-XLS, Excel opens natively) ===
