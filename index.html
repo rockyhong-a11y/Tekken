@@ -577,6 +577,7 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      min-width: 0;
       transition: transform 0.15s, border-color 0.15s;
     }
     .game-card:hover { transform: translateY(-2px); }
@@ -591,8 +592,8 @@
       background-position: center;
       background-color: #000;
     }
-    .game-card .body { padding: 12px; flex: 1; display: flex; flex-direction: column; }
-    .game-card h3 { margin: 0 0 6px 0; font-size: 15px; }
+    .game-card .body { padding: 12px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .game-card h3 { margin: 0 0 6px 0; font-size: 15px; overflow-wrap: anywhere; }
     .game-card .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
     .badge {
       font-size: 11px;
@@ -2950,25 +2951,31 @@
         summary.textContent = `RAWG 조회 중… ${i + 1} / ${total}`;
 
         let rawgData = null;
+        let detail = null;
         try {
           const results = await rawgSearch(g.title);
-          if (results && results.length) rawgData = results[0];
+          if (results && results.length) {
+            rawgData = results[0];
+            // 상세 정보로 설명(description) 보강
+            detail = await rawgDetail(rawgData.id);
+          }
         } catch (_) { /* 실패 시 제목만으로 추가 */ }
 
+        const src = detail || rawgData;
         newGames.push({
           id: localUid(),
           category: 'game',
-          title: rawgData ? rawgData.name : g.title,
+          title: src ? (src.name || g.title) : g.title,
           status: g.status,
           platform: 'PC',
-          genres: rawgData ? (rawgData.genres || []).map((x) => x.name) : [],
-          released: rawgData ? (rawgData.released || '') : '',
-          description: '',
+          genres: src ? (src.genres || []).map((x) => translateGenre(x.name || x)) : [],
+          released: src ? (src.released || '') : '',
+          description: detail ? (detail.description_raw || stripHtml(detail.description) || '') : '',
           note: '',
-          background_image: rawgData ? (rawgData.background_image || '') : '',
+          background_image: src ? (src.background_image || '') : '',
           screenshots: [],
-          rawg_slug: rawgData ? (rawgData.slug || '') : '',
-          rawg_id: rawgData ? (rawgData.id || null) : null,
+          rawg_slug: src ? (src.slug || '') : '',
+          rawg_id: src ? (src.id || null) : null,
           createdAt: now + i,
         });
 
