@@ -1156,6 +1156,7 @@
       localUpdatedAt: (profile) => `gametracker:localUpdatedAt:${profile}`,
       refreshToken: 'archivezero:refreshToken',
       authUid: 'archivezero:uid',
+      authProfile: 'archivezero:authProfile',
     };
 
     // === Profile PIN (4-digit) ===
@@ -1362,6 +1363,13 @@
         state.userPhoto = data.photoUrl || '';
         localStorage.setItem(KEYS.refreshToken, data.refreshToken);
         localStorage.setItem(KEYS.authUid, data.localId);
+        // 자동 로그인 시 복원할 수 있도록 표시용 프로필 정보도 저장
+        // (refresh token 엔드포인트는 이름/이메일/사진을 돌려주지 않음)
+        localStorage.setItem(KEYS.authProfile, JSON.stringify({
+          name: state.userDisplayName,
+          email: state.userEmail,
+          photo: state.userPhoto,
+        }));
         return true;
       } catch (err) {
         $('lockAuthError').textContent = `로그인 오류: ${err.message}`;
@@ -1396,6 +1404,9 @@
     function signOut() {
       localStorage.removeItem(KEYS.refreshToken);
       localStorage.removeItem(KEYS.authUid);
+      localStorage.removeItem(KEYS.authProfile);
+      // GitHub Pages 새로고침 시 즉시 재-자동로그인 되지 않도록 현재 프로필 표식도 제거
+      localStorage.removeItem(KEYS.currentProfile);
       state.uid = null;
       state.idToken = null;
       state.refreshToken = null;
@@ -3065,6 +3076,13 @@
         refreshAuthToken().then(ok => {
           if (ok) {
             state.uid = localStorage.getItem(KEYS.authUid) || state.uid;
+            // 저장해둔 표시용 프로필 정보 복원 (이름/이메일/사진)
+            try {
+              const p = JSON.parse(localStorage.getItem(KEYS.authProfile) || '{}');
+              state.userDisplayName = p.name || '';
+              state.userEmail = p.email || '';
+              state.userPhoto = p.photo || '';
+            } catch {}
             showLockScreen(); // 인증 완료 후 프로필 뷰 표시
           } else {
             initGoogleSignIn();
