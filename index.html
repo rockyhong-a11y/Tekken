@@ -627,18 +627,27 @@
       overflow: hidden;
     }
     .game-card .shots {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 8px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
     }
+    .game-card .shots.single { grid-template-columns: 1fr; }
     .game-card .shots img {
-      width: 56px;
-      height: 36px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      height: auto;
       object-fit: cover;
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
       border: 1px solid var(--border);
+      background: #000;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .game-card .shots img:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     }
     .game-card .card-actions {
       margin-top: auto;
@@ -2612,7 +2621,9 @@
     function gameCardHTML(g) {
       if (g.category === 'movie' || g.category === 'tv' || g.category === 'anime') return mediaCardHTML(g);
 
-      const shots = (g.screenshots || []).slice(0, 4).map((s, i) => `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
+      const shotList = (g.screenshots || []).slice(0, 4);
+      const shotsCls = shotList.length === 1 ? 'shots single' : 'shots';
+      const shots = shotList.map((s, i) => `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
       const cover = g.background_image
         ? `<div class="cover" style="background-image:url('${g.background_image.replace(/'/g, "\\'")}')"></div>`
         : '';
@@ -2632,7 +2643,7 @@
             </div>
             ${g.description ? `<p class="desc">${escapeHtml(g.description)}</p>` : ''}
             ${g.note ? `<p class="desc" style="color:#cbd0e0">📝 ${escapeHtml(g.note)}</p>` : ''}
-            ${shots ? `<div class="shots">${shots}</div>` : ''}
+            ${shots ? `<div class="${shotsCls}">${shots}</div>` : ''}
             <div class="card-actions">
               <a class="youtube" href="${youtubeSearchUrl(g.title)}" target="_blank" rel="noreferrer noopener">▶ 공략</a>
               <button type="button" class="tmdb-link" data-action="rawg-detail" data-id="${g.id}">🔗 더보기</button>
