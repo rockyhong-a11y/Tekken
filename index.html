@@ -578,6 +578,7 @@
     .game-table .row-actions .youtube:hover { background: #cc0029; }
 
     .game-card {
+      position: relative;
       background: var(--surface-2);
       border: 1px solid var(--border);
       border-left: 4px solid var(--border);
@@ -605,6 +606,7 @@
       position: absolute;
       top: 10px;
       right: 10px;
+      z-index: 2;
       min-width: 38px;
       height: 38px;
       padding: 0 8px;
@@ -1048,6 +1050,13 @@
       flex: 0 1 140px;
       min-width: 0;
     }
+    .sort-dir-btn {
+      flex: 0 0 auto;
+      padding: 6px 11px;
+      font-size: 14px;
+      line-height: 1;
+      font-weight: bold;
+    }
     .library-menu-wrap { position: relative; }
     .library-menu-wrap > button {
       font-size: 18px;
@@ -1458,6 +1467,7 @@
             <option value="metacritic">메타스코어</option>
             <option value="title">알파벳순</option>
           </select>
+          <button type="button" id="sortDirBtn" class="ghost sort-dir-btn" title="정렬 방향" aria-label="정렬 방향 전환">↓</button>
           <div class="library-menu-wrap">
             <button id="libraryMenuBtn" type="button" class="ghost" title="라이브러리 메뉴" aria-label="라이브러리 메뉴">⋯</button>
             <div id="libraryDropdown" class="profile-dropdown hidden">
@@ -1695,6 +1705,7 @@
       _suppressPull: false,   // 새 프로필 직후 의도치 않은 클라우드 데이터 유입 차단
       statusFilter: { cleared: true, playing: true, planned: true },
       sortBy: localStorage.getItem('archive:sortBy') || 'createdAt',
+      sortDir: localStorage.getItem('archive:sortDir') || 'desc',
       // Firebase Auth
       uid: null,              // Firebase user ID
       idToken: null,          // Firebase ID token (short-lived, ~1h)
@@ -2652,21 +2663,32 @@
         });
         return list;
       }
-      // 카드 모드 — 라이브러리 정렬 드롭다운 사용
+      // 카드 모드 — 라이브러리 정렬 드롭다운 + 방향 토글
+      const dir = state.sortDir === 'asc' ? 1 : -1;
       list.sort((a, b) => {
-        if (key === 'createdAt') return (b.createdAt || 0) - (a.createdAt || 0);
-        if (key === 'title') return (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase());
+        if (key === 'createdAt') return ((a.createdAt || 0) - (b.createdAt || 0)) * dir;
+        if (key === 'title') {
+          const av = (a.title || '').toLowerCase();
+          const bv = (b.title || '').toLowerCase();
+          if (!av && !bv) return 0;
+          if (!av) return 1;          // 빈 값은 항상 뒤로
+          if (!bv) return -1;
+          return av.localeCompare(bv) * dir;
+        }
         if (key === 'released') {
           const av = a.released || '', bv = b.released || '';
           if (!av && !bv) return 0;
           if (!av) return 1;
           if (!bv) return -1;
-          return bv.localeCompare(av); // 최신순
+          return av.localeCompare(bv) * dir;
         }
         if (key === 'metacritic') {
-          const av = (typeof a.metacritic === 'number') ? a.metacritic : -1;
-          const bv = (typeof b.metacritic === 'number') ? b.metacritic : -1;
-          return bv - av; // 점수 높은 순
+          const av = (typeof a.metacritic === 'number') ? a.metacritic : null;
+          const bv = (typeof b.metacritic === 'number') ? b.metacritic : null;
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;   // 점수 없는 항목은 뒤로
+          if (bv == null) return -1;
+          return (av - bv) * dir;
         }
         return 0;
       });
@@ -2730,11 +2752,12 @@
         ? `<span class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="Metacritic">${mc}</span>`
         : '';
       const cover = g.background_image
-        ? `<div class="cover" style="background-image:url('${g.background_image.replace(/'/g, "\\'")}')">${metaBadge}</div>`
-        : (metaBadge ? `<div class="cover no-bg" style="aspect-ratio:auto;height:auto;padding:10px;display:flex;justify-content:flex-end">${metaBadge}</div>` : '');
+        ? `<div class="cover" style="background-image:url('${g.background_image.replace(/'/g, "\\'")}')"></div>`
+        : '';
       const genres = (g.genres || []).map((x) => `<span class="badge">${escapeHtml(x)}</span>`).join('');
       return `
         <article class="game-card status-${g.status}">
+          ${metaBadge}
           ${cover}
           <div class="body">
             <h3>${escapeHtml(g.title)}</h3>
@@ -2956,6 +2979,28 @@
       // 검색 placeholder 카테고리 맞춰 갱신
       const search = $('searchInput');
       if (search) search.placeholder = currentCategory === 'game' ? '🔍 게임명/장르 검색' : '🔍 제목/장르 검색';
+
+      // 영상 탭에서는 '메타스코어' 정렬 옵션 숨기기
+      const sortBy = $('sortBy');
+      if (sortBy) {
+        const metaOpt = sortBy.querySelector('option[value="metacritic"]');
+        if (metaOpt) {
+          if (currentCategory === 'media') {
+            metaOpt.hidden = true;
+            metaOpt.disabled = true;
+            if (sortBy.value === 'metacritic') {
+              sortBy.value = 'createdAt';
+              state.sortBy = 'createdAt';
+              state.sortDir = 'desc';
+              localStorage.setItem('archive:sortBy', state.sortBy);
+              localStorage.setItem('archive:sortDir', state.sortDir);
+            }
+          } else {
+            metaOpt.hidden = false;
+            metaOpt.disabled = false;
+          }
+        }
+      }
     }
 
     // 선택값을 hidden input에 반영하고 버튼 하이라이트 갱신
@@ -3356,8 +3401,8 @@
         if (g.genres && g.genres.length) g.genres = g.genres.map((x) => translateGenre(x));
       });
 
-      // 2) 설명/이미지/슬러그가 비어 있는 게임만 RAWG에서 보강
-      const need = games.filter((g) => !g.description || !g.background_image || !g.rawg_slug);
+      // 2) 설명/이미지/슬러그/메타스코어가 비어 있는 게임만 RAWG에서 보강
+      const need = games.filter((g) => !g.description || !g.background_image || !g.rawg_slug || g.metacritic == null);
 
       const btn = $('enrichBtn');
       _enriching = true;
@@ -3937,9 +3982,24 @@
       // 검색·정렬
       $('searchInput').addEventListener('input', renderList);
       $('sortBy').value = state.sortBy;
+      // 정렬 키별 기본 방향 (변경 시 자동 적용)
+      const DEFAULT_SORT_DIR = { createdAt: 'desc', released: 'desc', metacritic: 'desc', title: 'asc' };
+      const updateSortDirBtn = () => {
+        $('sortDirBtn').textContent = state.sortDir === 'asc' ? '↑' : '↓';
+      };
+      updateSortDirBtn();
       $('sortBy').addEventListener('change', (e) => {
         state.sortBy = e.target.value;
+        state.sortDir = DEFAULT_SORT_DIR[state.sortBy] || 'desc';
         localStorage.setItem('archive:sortBy', state.sortBy);
+        localStorage.setItem('archive:sortDir', state.sortDir);
+        updateSortDirBtn();
+        renderList();
+      });
+      $('sortDirBtn').addEventListener('click', () => {
+        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        localStorage.setItem('archive:sortDir', state.sortDir);
+        updateSortDirBtn();
         renderList();
       });
 
