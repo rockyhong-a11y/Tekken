@@ -619,7 +619,11 @@
       color: #fff;
       box-shadow: 0 2px 8px rgba(0,0,0,0.45);
       border: 2px solid rgba(0,0,0,0.35);
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.12s;
     }
+    .metascore:hover { transform: scale(1.06); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
     .metascore.good { background: #66cc33; color: #fff; }
     .metascore.ok   { background: #ffcc33; color: #1a1a1a; }
     .metascore.bad  { background: #ff3a3a; color: #fff; }
@@ -2587,10 +2591,14 @@
         playing: list.filter((g) => g.status === 'playing').length,
         planned: list.filter((g) => g.status === 'planned').length,
       };
+      // 토글 칩 전용 축약 라벨 — 카드 배지·폼 라벨은 기존 statusLabel 유지
+      const shortLabels = currentCategory === 'media'
+        ? { cleared: '정주행', playing: '시청', planned: '예정' }
+        : { cleared: '엔딩',   playing: '플레이', planned: '예정' };
       const box = $('statusToggles');
       box.innerHTML = ['cleared', 'playing', 'planned'].map((s) => {
         const active = !!state.statusFilter[s];
-        return `<button type="button" class="status-toggle status-${s} ${active ? 'active' : ''}" data-status="${s}" aria-pressed="${active}">${escapeHtml(statusLabel(s))} ${counts[s]}</button>`;
+        return `<button type="button" class="status-toggle status-${s} ${active ? 'active' : ''}" data-status="${s}" aria-pressed="${active}">${escapeHtml(shortLabels[s])} ${counts[s]}</button>`;
       }).join('');
       box.querySelectorAll('.status-toggle').forEach((b) => {
         b.addEventListener('click', () => {
@@ -2700,6 +2708,15 @@
       return `https://www.youtube.com/results?search_query=${q}`;
     }
 
+    // Metacritic 검색 URL — 카테고리에 맞는 섹션으로 이동
+    // game=1, movie=3, tv=2 (anime 포함)
+    function metacriticSearchUrl(title, category) {
+      const cat = category === 'game' ? 1
+        : (category === 'tv' || category === 'anime') ? 2
+        : 3; // movie/그 외
+      return `https://www.metacritic.com/search/${encodeURIComponent(title || '')}/?category=${cat}`;
+    }
+
     // 리스트 뷰의 액션 버튼 그룹 — 영화/TV는 예고편 + TMDB, 게임은 공략 검색
     function rowMediaButtons(g) {
       const isMedia = g.category === 'movie' || g.category === 'tv' || g.category === 'anime';
@@ -2749,7 +2766,7 @@
       const shots = shotList.map((s, i) => `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
       const mc = (typeof g.metacritic === 'number') ? g.metacritic : null;
       const metaBadge = mc != null
-        ? `<span class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="Metacritic">${mc}</span>`
+        ? `<a href="${metacriticSearchUrl(g.title, 'game')}" target="_blank" rel="noopener noreferrer" class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="Metacritic에서 보기">${mc}</a>`
         : '';
       const cover = g.background_image
         ? `<div class="cover" style="background-image:url('${g.background_image.replace(/'/g, "\\'")}')"></div>`
@@ -2831,8 +2848,14 @@
       const shots = (g.screenshots || []).slice(0, 4).map((s, i) =>
         `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
 
+      const mc = (typeof g.metacritic === 'number') ? g.metacritic : null;
+      const metaBadge = mc != null
+        ? `<a href="${metacriticSearchUrl(g.title, cat)}" target="_blank" rel="noopener noreferrer" class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="Metacritic에서 보기">${mc}</a>`
+        : '';
+
       return `
         <article class="game-card media-card status-${g.status}">
+          ${metaBadge}
           ${cover}
           <div class="body">
             <h3>${escapeHtml(g.title)}</h3>
@@ -2979,28 +3002,6 @@
       // 검색 placeholder 카테고리 맞춰 갱신
       const search = $('searchInput');
       if (search) search.placeholder = currentCategory === 'game' ? '🔍 게임명/장르 검색' : '🔍 제목/장르 검색';
-
-      // 영상 탭에서는 '메타스코어' 정렬 옵션 숨기기
-      const sortBy = $('sortBy');
-      if (sortBy) {
-        const metaOpt = sortBy.querySelector('option[value="metacritic"]');
-        if (metaOpt) {
-          if (currentCategory === 'media') {
-            metaOpt.hidden = true;
-            metaOpt.disabled = true;
-            if (sortBy.value === 'metacritic') {
-              sortBy.value = 'createdAt';
-              state.sortBy = 'createdAt';
-              state.sortDir = 'desc';
-              localStorage.setItem('archive:sortBy', state.sortBy);
-              localStorage.setItem('archive:sortDir', state.sortDir);
-            }
-          } else {
-            metaOpt.hidden = false;
-            metaOpt.disabled = false;
-          }
-        }
-      }
     }
 
     // 선택값을 hidden input에 반영하고 버튼 하이라이트 갱신
