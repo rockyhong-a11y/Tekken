@@ -1053,40 +1053,81 @@
     }
     .bottom-tab {
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 2px;
       background: transparent;
       border: none;
       color: var(--muted);
-      padding: 6px 4px;
+      padding: 8px 4px;
       cursor: pointer;
       border-radius: 10px;
       transition: background 0.12s, color 0.12s;
       min-width: 0;
     }
-    .bottom-tab .tab-icon {
-      font-size: 20px;
-      line-height: 1;
-      display: inline-flex;
-      align-items: baseline;
-    }
-    .bottom-tab .tab-icon sup { font-size: 12px; margin-left: 1px; }
-    .bottom-tab .tab-label {
-      font-size: 11px;
+    .bottom-tab .tab-text {
+      font-size: 13px;
+      line-height: 1.1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       max-width: 100%;
     }
+    .bottom-tab .tab-text sup { font-size: 0.7em; vertical-align: super; margin-left: 1px; }
     .bottom-tab.active { color: var(--accent); background: var(--surface-2); }
     .bottom-tab:hover { color: var(--text); }
 
     @media (max-width: 480px) {
-      .bottom-tab .tab-label { font-size: 10px; }
-      .bottom-tab .tab-icon { font-size: 18px; }
+      .bottom-tab .tab-text { font-size: 12px; }
     }
+    @media (max-width: 360px) {
+      .bottom-tab .tab-text { font-size: 11px; }
+    }
+
+    /* === Form card header (제목 + 우측 액션) === */
+    .form-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .form-card-header h2 { margin: 0; }
+    .form-header-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .form-header-actions button { padding: 7px 14px; font-size: 13px; }
+
+    /* === 추가 정보 토글 === */
+    .extra-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      margin: 4px 0 12px;
+      width: 100%;
+      justify-content: flex-start;
+    }
+    .extra-toggle:hover { color: var(--text); border-color: var(--accent); }
+    .extra-toggle-arrow { font-size: 11px; }
+    .extra-fields { display: flex; flex-direction: column; gap: 12px; }
+
+    /* === 플랫폼 아이콘 전용 모드 (게임 카테고리) === */
+    .choice-group.icon-only .choice-btn {
+      padding: 8px 10px;
+      min-width: 44px;
+    }
+    .choice-group.icon-only .choice-btn .choice-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .choice-group.icon-only .choice-btn svg { display: block; }
   </style>
 </head>
 <body>
@@ -1262,7 +1303,13 @@
 
   <main class="tabbed">
     <section class="form-card" data-pane="form">
-      <h2 id="formTitle">새 항목 추가</h2>
+      <div class="form-card-header">
+        <h2 id="formTitle">새 항목 추가</h2>
+        <div class="form-header-actions">
+          <button type="submit" form="gameForm" id="submitBtn">추가</button>
+          <button type="button" id="resetBtn" class="ghost">초기화</button>
+        </div>
+      </div>
       <form id="gameForm" class="game-form">
         <div class="field">
           <label for="title" id="titleLabel">제목 *</label>
@@ -1298,24 +1345,24 @@
           <textarea id="description" rows="3" placeholder="자동 채움 또는 직접 입력"></textarea>
         </div>
 
-        <div class="field">
-          <label for="note">메모</label>
-          <textarea id="note" rows="2" placeholder="클리어 일자, 감상 등"></textarea>
-        </div>
+        <button type="button" id="extraToggle" class="extra-toggle" aria-expanded="false" aria-controls="extraFields">
+          <span class="extra-toggle-arrow">▸</span> 메모·스크린샷
+        </button>
+        <div id="extraFields" class="extra-fields hidden">
+          <div class="field">
+            <label for="note">메모</label>
+            <textarea id="note" rows="2" placeholder="클리어 일자, 감상 등"></textarea>
+          </div>
 
-        <div class="field">
-          <label for="screenshots">스크린샷 (여러 장 선택 가능)</label>
-          <input type="file" id="screenshots" accept="image/*" multiple />
-          <div id="screenshotPreview" class="screenshot-preview"></div>
+          <div class="field">
+            <label for="screenshots">스크린샷 (여러 장 선택 가능)</label>
+            <input type="file" id="screenshots" accept="image/*" multiple />
+            <div id="screenshotPreview" class="screenshot-preview"></div>
+          </div>
         </div>
 
         <input type="hidden" id="editingId" />
         <input type="hidden" id="coverImage" />
-
-        <div class="actions">
-          <button type="submit" id="submitBtn">추가</button>
-          <button type="button" id="resetBtn" class="ghost">초기화</button>
-        </div>
       </form>
     </section>
 
@@ -1359,21 +1406,17 @@
   </main>
 
   <nav class="bottom-tabs" id="bottomTabs" role="tablist" aria-label="앱 탭">
-    <button type="button" data-tab="game-add" class="bottom-tab">
-      <span class="tab-icon">🎮<sup>＋</sup></span>
-      <span class="tab-label">게임 추가</span>
+    <button type="button" data-tab="game-add" class="bottom-tab" title="게임 추가" aria-label="게임 추가">
+      <span class="tab-text">🎮<sup>＋</sup></span>
     </button>
-    <button type="button" data-tab="game-library" class="bottom-tab active">
-      <span class="tab-icon">🎮</span>
-      <span class="tab-label">게임 라이브러리</span>
+    <button type="button" data-tab="game-library" class="bottom-tab active" title="게임 라이브러리" aria-label="게임 라이브러리">
+      <span class="tab-text">🎮 라이브러리</span>
     </button>
-    <button type="button" data-tab="media-add" class="bottom-tab">
-      <span class="tab-icon">🎬<sup>＋</sup></span>
-      <span class="tab-label">영상 추가</span>
+    <button type="button" data-tab="media-add" class="bottom-tab" title="영상 추가" aria-label="영상 추가">
+      <span class="tab-text">🎬<sup>＋</sup></span>
     </button>
-    <button type="button" data-tab="media-library" class="bottom-tab">
-      <span class="tab-icon">🎬</span>
-      <span class="tab-label">영상 라이브러리</span>
+    <button type="button" data-tab="media-library" class="bottom-tab" title="영상 라이브러리" aria-label="영상 라이브러리">
+      <span class="tab-text">🎬 라이브러리</span>
     </button>
   </nav>
 
@@ -1440,14 +1483,21 @@
                formTitle: '새 영상 추가', placeholder: '영화 / TV 시리즈 / 애니 / 극장판 / OVA (자동 검색)' },
     };
     // 단일선택 버튼용 플랫폼/매체 (값 + 아이콘 + 라벨)
+    // 게임 플랫폼 아이콘은 인라인 SVG — 브랜드를 식별 가능한 단순 글리프 (currentColor / 브랜드 컬러)
     const PLATFORM_OPTIONS = {
       game: [
-        { value: 'PC',      icon: '💻', label: 'PC' },
-        { value: 'PS',      icon: '🎮', label: 'PS' },
-        { value: 'Switch',  icon: '🕹️', label: 'Switch' },
-        { value: 'Xbox',    icon: '❎', label: 'Xbox' },
-        { value: 'iOS',     icon: '🍎', label: 'iOS' },
-        { value: 'Android', icon: '🤖', label: 'Android' },
+        { value: 'PC', label: 'PC',
+          icon: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.2"/><path d="M8 20h8M10 16v4M14 16v4" stroke-linecap="round"/></svg>` },
+        { value: 'PS', label: 'PlayStation',
+          icon: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5.5" r="2"/><path d="M6.5 12 L4.5 15h4z" stroke-linejoin="round"/><path d="M15 10.5l4 4M19 10.5l-4 4" stroke-linecap="round"/><rect x="10" y="15.5" width="4" height="4" rx="0.3"/></svg>` },
+        { value: 'Switch', label: 'Switch',
+          icon: `<svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4.5" width="8" height="15" rx="2.4" fill="#e60012"/><rect x="13" y="4.5" width="8" height="15" rx="2.4" fill="#00c3e3"/><circle cx="7" cy="8.5" r="1" fill="#fff"/><rect x="15.5" y="13" width="3" height="3" rx="1.5" fill="#fff"/></svg>` },
+        { value: 'Xbox', label: 'Xbox',
+          icon: `<svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="#107C10"/><path d="M7 7c2.5 1.5 5 5 5 5s2.5-3.5 5-5M7 17c2.5-1.5 5-5 5-5s2.5 3.5 5 5" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg>` },
+        { value: 'iOS', label: 'iOS',
+          icon: `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M16.5 12.5c0-2.6 2.1-3.9 2.2-4-1.2-1.7-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9s-2.1-.9-3.4-.9c-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.5 1.3 0 1.8-.8 3.4-.8s2 .8 3.4.8 2.3-1.2 3.1-2.5c.7-.9 1.1-1.8 1.5-2.7-.1 0-2.9-1.1-2.9-4.1zM13.7 4.3c.7-.9 1.2-2.1 1.1-3.3-1 0-2.3.7-3 1.5-.6.7-1.2 2-1 3.2 1.1.1 2.3-.6 2.9-1.4z"/></svg>` },
+        { value: 'Android', label: 'Android',
+          icon: `<svg viewBox="0 0 24 24" width="22" height="22" fill="#3DDC84"><path d="M5 11h14v7a1 1 0 0 1-1 1h-1v3h-2v-3H9v3H7v-3H6a1 1 0 0 1-1-1v-7zM7.7 9.5C7.9 6.4 9.7 4 12 4s4.1 2.4 4.3 5.5l-.6 0H8.3l-.6 0zM9.5 7.2a.7.7 0 1 1 0 1.4.7.7 0 0 1 0-1.4zm5 0a.7.7 0 1 1 0 1.4.7.7 0 0 1 0-1.4zM2 12.3a1.1 1.1 0 1 1 2.2 0v4.8a1.1 1.1 0 1 1-2.2 0v-4.8zm17.8 0a1.1 1.1 0 1 1 2.2 0v4.8a1.1 1.1 0 1 1-2.2 0v-4.8z"/></svg>` },
       ],
       media: [
         { value: 'OTT',    icon: '📺', label: 'OTT' },
@@ -2310,6 +2360,17 @@
       renderScreenshotPreview();
       $('lookupResults').innerHTML = '';
       $('submitBtn').textContent = '추가';
+      setExtraFieldsOpen(false);
+    }
+
+    function setExtraFieldsOpen(open) {
+      const box = $('extraFields');
+      const tog = $('extraToggle');
+      if (!box || !tog) return;
+      box.classList.toggle('hidden', !open);
+      tog.setAttribute('aria-expanded', String(!!open));
+      const arrow = tog.querySelector('.extra-toggle-arrow');
+      if (arrow) arrow.textContent = open ? '▾' : '▸';
     }
 
     function buildGameFromForm() {
@@ -2410,6 +2471,8 @@
       state.screenshotsBuffer = (g.screenshots || []).slice();
       renderScreenshotPreview();
       $('submitBtn').textContent = '수정 저장';
+      // 메모나 스크린샷이 있으면 추가 정보 펼쳐서 표시
+      setExtraFieldsOpen(!!(g.note || (g.screenshots && g.screenshots.length)));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -2809,10 +2872,13 @@
         curPlat = LEGACY_PLATFORM_MAP[curPlat] || '';
       }
       if (!curPlat) curPlat = (opts[0] || {}).value || '';
-      platGroup.innerHTML = opts.map((o) =>
-        `<button type="button" class="choice-btn" data-value="${escapeHtml(o.value)}">` +
-        `<span class="choice-icon">${o.icon}</span>${escapeHtml(o.label)}</button>`
-      ).join('');
+      const iconOnly = currentCategory === 'game';
+      platGroup.classList.toggle('icon-only', iconOnly);
+      platGroup.innerHTML = opts.map((o) => {
+        const labelHtml = iconOnly ? '' : escapeHtml(o.label);
+        return `<button type="button" class="choice-btn" data-value="${escapeHtml(o.value)}" title="${escapeHtml(o.label)}" aria-label="${escapeHtml(o.label)}">` +
+          `<span class="choice-icon">${o.icon}</span>${labelHtml}</button>`;
+      }).join('');
       setChoiceValue('platform', opts.some((o) => o.value === curPlat) ? curPlat : '', platGroup);
     }
 
@@ -3736,6 +3802,12 @@
       // Form
       $('gameForm').addEventListener('submit', submitGame);
       $('resetBtn').addEventListener('click', resetForm);
+
+      // 메모/스크린샷 토글
+      $('extraToggle').addEventListener('click', () => {
+        const isOpen = !$('extraFields').classList.contains('hidden');
+        setExtraFieldsOpen(!isOpen);
+      });
       // 상태/플랫폼 단일선택 버튼 그룹 클릭 처리 (이벤트 위임)
       $('statusGroup').addEventListener('click', (e) => {
         const btn = e.target.closest('.choice-btn');
