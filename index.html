@@ -314,16 +314,19 @@
       border-radius: 8px;
       cursor: pointer;
       font-weight: 500;
-      transition: background 0.15s;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.08s;
       white-space: nowrap;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.12);
     }
-    button:hover { background: var(--accent-hover); }
+    button:hover { background: var(--accent-hover); box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 3px 8px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.14); }
+    button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.18); }
     button.ghost {
-      background: transparent;
+      background: var(--surface-2);
       border: 1px solid var(--border);
       color: var(--text);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.12);
     }
-    button.ghost:hover { background: var(--surface-2); }
+    button.ghost:hover { background: var(--border); border-color: var(--accent); box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 6px rgba(0,0,0,0.18); }
     button.ghost.danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
     button.ghost.danger:hover { background: rgba(239, 68, 68, 0.08); }
 
@@ -344,14 +347,17 @@
       color: var(--text);
       font-size: 14px;
       cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.08s;
       user-select: none;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.1);
     }
-    .choice-btn:hover { border-color: var(--accent); }
+    .choice-btn:hover { border-color: var(--accent); box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 6px rgba(0,0,0,0.16); }
+    .choice-btn:active { transform: translateY(1px); }
     .choice-btn.selected {
       background: var(--accent);
       border-color: var(--accent);
       color: #fff;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 2px 8px rgba(0,0,0,0.22);
     }
     .choice-btn .choice-icon { font-size: 16px; line-height: 1; }
 
@@ -1235,24 +1241,29 @@
       left: 0; right: 0; bottom: 0;
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+      gap: 4px;
+      background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+      border-top: 1px solid var(--accent);
+      padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
       z-index: 50;
-      box-shadow: 0 -4px 12px rgba(0,0,0,0.18);
+      box-shadow: 0 -1px 0 rgba(255,255,255,0.04) inset, 0 -6px 20px rgba(0,0,0,0.28), 0 -2px 6px rgba(0,0,0,0.18);
+      backdrop-filter: saturate(140%) blur(8px);
+      -webkit-backdrop-filter: saturate(140%) blur(8px);
     }
     .bottom-tab {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: transparent;
-      border: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
       color: var(--muted);
-      padding: 8px 4px;
+      padding: 10px 4px;
       cursor: pointer;
       border-radius: 10px;
-      transition: background 0.12s, color 0.12s;
+      transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.15s, transform 0.08s;
       min-width: 0;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.12);
+      font-weight: 500;
     }
     .bottom-tab .tab-text {
       font-size: 13px;
@@ -1263,8 +1274,15 @@
       max-width: 100%;
     }
     .bottom-tab .tab-text sup { font-size: 0.7em; vertical-align: super; margin-left: 1px; }
-    .bottom-tab.active { color: var(--accent); background: var(--surface-2); }
-    .bottom-tab:hover { color: var(--text); }
+    .bottom-tab.active {
+      color: #fff;
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 3px 10px rgba(124, 92, 255, 0.35), 0 1px 3px rgba(0,0,0,0.18);
+      font-weight: 600;
+    }
+    .bottom-tab:not(.active):hover { color: var(--text); border-color: var(--accent); }
+    .bottom-tab:active { transform: translateY(1px); }
 
     @media (max-width: 480px) {
       .bottom-tab .tab-text { font-size: 12px; }
@@ -1784,13 +1802,17 @@
     const translateGenres = (list) => (list || []).map((g) => translateGenre(typeof g === 'string' ? g : g.name));
 
     // 설명은 자유 텍스트라 MyMemory 무료 번역 API 사용 (키 불필요, 익명 5000 단어/일)
+    const _translateCache = new Map();   // en→ko 번역 캐시
     async function translateChunk(text) {
+      if (_translateCache.has(text)) return _translateCache.get(text);
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ko`;
       try {
         const res = await fetch(url);
-        if (!res.ok) return text;
+        if (!res.ok) { _translateCache.set(text, text); return text; }
         const json = await res.json();
-        return (json.responseData && json.responseData.translatedText) || text;
+        const out = (json.responseData && json.responseData.translatedText) || text;
+        _translateCache.set(text, out);
+        return out;
       } catch {
         return text;
       }
@@ -2336,20 +2358,26 @@
 
     // === RAWG lookup ===
     // RAWG는 영문 타이틀이 우선이라 한글 쿼리는 영어로 번역 후 검색
+    const _toEngCache = new Map();   // ko→en 번역 캐시 (동일 쿼리 재호출 방지)
     async function toEnglish(text) {
       if (!/[가-힣]/.test(text)) return text;
+      if (_toEngCache.has(text)) return _toEngCache.get(text);
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ko|en`;
       try {
         const res = await fetch(url);
-        if (!res.ok) return text;
+        if (!res.ok) { _toEngCache.set(text, text); return text; }
         const json = await res.json();
-        return (json.responseData && json.responseData.translatedText) || text;
+        const out = (json.responseData && json.responseData.translatedText) || text;
+        _toEngCache.set(text, out);
+        return out;
       } catch {
         return text;
       }
     }
 
+    const _rawgCache = new Map();
     async function rawgSearch(query) {
+      if (_rawgCache.has(query)) return _rawgCache.get(query);
       const key = getRawgKey();
       // page_size 40 = RAWG 응답 최대치
       const url = `https://api.rawg.io/api/games?key=${encodeURIComponent(key)}&search=${encodeURIComponent(query)}&page_size=40`;
@@ -2357,7 +2385,9 @@
         const res = await fetch(url);
         if (!res.ok) throw new Error(`RAWG ${res.status}`);
         const json = await res.json();
-        return json.results || [];
+        const out = json.results || [];
+        _rawgCache.set(query, out);
+        return out;
       } catch (err) {
         console.warn('RAWG 조회 실패:', err.message);
         return null;
@@ -2381,7 +2411,10 @@
     const tmdbPersonUrl = (id) => `https://www.themoviedb.org/person/${id}?language=ko-KR`;
     const youtubeUrl = (key) => `https://www.youtube.com/watch?v=${key}`;
 
+    const _tmdbCache = new Map();
     async function tmdbSearch(query, type) {
+      const cacheKey = `${type || 'movie'}::${query}`;
+      if (_tmdbCache.has(cacheKey)) return _tmdbCache.get(cacheKey);
       const key = getTmdbKey();
       if (!key) return [];
       const t = type || 'movie';
@@ -2390,7 +2423,9 @@
         const res = await fetch(url);
         if (!res.ok) throw new Error(`TMDB ${res.status}`);
         const json = await res.json();
-        return json.results || [];
+        const out = json.results || [];
+        _tmdbCache.set(cacheKey, out);
+        return out;
       } catch (err) {
         console.warn('TMDB 조회 실패:', err.message);
         return [];
@@ -2475,24 +2510,35 @@
 
     // 검색: 카테고리에 맞는 API 호출 + 정규화.
     // media는 영화·TV를 병렬로 모두 검색해 popularity 내림차순으로 병합.
-    async function searchByCategory(query) {
+    // onPartial: 부분 결과 콜백 — 첫 응답 도착 즉시 화면에 표시 (UX 가속화)
+    async function searchByCategory(query, onPartial) {
       if (currentCategory === 'game') {
+        // 영문 입력이면 toEnglish가 즉시 반환(캐시·정규식) → RAWG 호출만 대기
         const q = await toEnglish(query);
         const raw = (await rawgSearch(q)) || [];
         return raw.map(normalizeItem);
       }
       if (currentCategory === 'media') {
-        const [movies, tvs] = await Promise.all([
-          tmdbSearch(query, 'movie'),
-          tmdbSearch(query, 'tv'),
-        ]);
-        const tagged = [
-          ...movies.map((m) => Object.assign(m, { _tmdbType: 'movie' })),
-          ...tvs.map((t) => Object.assign(t, { _tmdbType: 'tv' })),
-        ];
-        // popularity 점수 높은 순 정렬 (TMDB가 제공)
-        tagged.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-        return tagged.map((raw) => normalizeMedia(raw, raw._tmdbType));
+        // movie와 tv를 병렬로 호출. 먼저 응답한 결과를 즉시 onPartial로 화면에 노출.
+        const partial = { movies: null, tvs: null };
+        const render = () => {
+          const tagged = [
+            ...(partial.movies || []).map((m) => Object.assign(m, { _tmdbType: 'movie' })),
+            ...(partial.tvs || []).map((t) => Object.assign(t, { _tmdbType: 'tv' })),
+          ];
+          tagged.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+          return tagged.map((raw) => normalizeMedia(raw, raw._tmdbType));
+        };
+        const moviePromise = tmdbSearch(query, 'movie').then((r) => {
+          partial.movies = r;
+          if (onPartial && partial.tvs === null) onPartial(render());
+        });
+        const tvPromise = tmdbSearch(query, 'tv').then((r) => {
+          partial.tvs = r;
+          if (onPartial && partial.movies === null) onPartial(render());
+        });
+        await Promise.all([moviePromise, tvPromise]);
+        return render();
       }
       return [];
     }
@@ -4582,7 +4628,11 @@
         const q = raw.trim();
         if (q.length < 2) { resultsBox.innerHTML = ''; return; }
         resultsBox.innerHTML = '<div class="muted" style="padding:6px">검색 중...</div>';
-        const results = await searchByCategory(q);
+        const results = await searchByCategory(q, (partial) => {
+          // 첫 응답이 도착하면 즉시 화면에 표시 (전체 완료를 기다리지 않음)
+          if (seq !== searchSeq) return;
+          if (partial && partial.length) renderLookupResults(partial);
+        });
         if (seq !== searchSeq) return;                  // 사용자가 이미 더 입력함 — 폐기
         renderLookupResults(results || []);
       };
@@ -4590,7 +4640,7 @@
       titleInput.addEventListener('input', (e) => {
         clearTimeout(debounceTimer);
         const v = e.target.value;
-        debounceTimer = setTimeout(() => runSearch(v), 400);
+        debounceTimer = setTimeout(() => runSearch(v), 220);
       });
 
       // 입력 영역 바깥 클릭 시 결과 닫기
