@@ -2886,10 +2886,11 @@
       return `https://www.youtube.com/results?search_query=${q}`;
     }
 
-    // Metacritic 검색 URL — 전체(All) 결과 페이지 (카테고리 필터 미적용)
-    // 점수 추출 시 JS에서 type 라벨(game/movie/tv show)로 필터링하므로 URL은 단일.
-    function metacriticSearchUrl(title) {
-      return `https://www.metacritic.com/search/${encodeURIComponent(title || '')}/`;
+    // RAWG 게임 페이지 URL (점수 배지 클릭 시 사용) — slug가 있으면 상세 페이지, 없으면 검색
+    function rawgScoreUrl(g) {
+      if (g && g.rawg_slug) return `https://rawg.io/games/${encodeURIComponent(g.rawg_slug)}`;
+      const title = (g && g.title) || '';
+      return `https://rawg.io/search?query=${encodeURIComponent(title)}`;
     }
 
 
@@ -2942,7 +2943,7 @@
       const shots = shotList.map((s, i) => `<img src="${s}" data-id="${g.id}" data-idx="${i}" class="shot-thumb" alt="" />`).join('');
       const mc = (typeof g.metacritic === 'number') ? g.metacritic : null;
       const metaBadge = mc != null
-        ? `<a href="${metacriticSearchUrl(g.title)}" target="_blank" rel="noopener noreferrer" class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="Metacritic에서 보기">${mc}</a>`
+        ? `<a href="${rawgScoreUrl(g)}" target="_blank" rel="noopener noreferrer" class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="RAWG에서 보기">${mc}</a>`
         : '';
       const cover = g.background_image
         ? `<div class="cover" style="background-image:url('${g.background_image.replace(/'/g, "\\'")}')"></div>`
@@ -3026,7 +3027,7 @@
 
       const mc = (typeof g.metacritic === 'number') ? g.metacritic : null;
       const metaBadge = mc != null
-        ? `<a href="${metacriticSearchUrl(g.title)}" target="_blank" rel="noopener noreferrer" class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="Metacritic에서 보기">${mc}</a>`
+        ? `<a href="${rawgScoreUrl(g)}" target="_blank" rel="noopener noreferrer" class="metascore ${mc >= 75 ? 'good' : mc >= 50 ? 'ok' : 'bad'}" title="RAWG에서 보기">${mc}</a>`
         : '';
 
       return `
