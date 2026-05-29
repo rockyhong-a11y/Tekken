@@ -4176,7 +4176,7 @@
         title: '📚 라이브러리에서 확인',
         body: '아래 탭 메뉴의 "게임 라이브러리"에서 저장한 게임을 확인할 수 있어요.',
         targetId: 'bottomTabs',
-        arrow: 'top',
+        arrow: 'bottom',
       },
     ];
 
@@ -4215,6 +4215,8 @@
       const arrow = $('tutorialArrow');
 
       if (target) {
+        // Ensure target is in view (e.g. step targeting an element below the fold)
+        target.scrollIntoView({ block: 'center', behavior: 'instant' });
         const r = target.getBoundingClientRect();
         const pad = 6;
         spotlight.style.left = `${r.left - pad}px`;
@@ -4222,21 +4224,28 @@
         spotlight.style.width = `${r.width + pad * 2}px`;
         spotlight.style.height = `${r.height + pad * 2}px`;
 
-        // Position card: prefer above or below target
+        // Position card: prefer arrow side, but auto-flip if it would go off-screen
         const vph = window.innerHeight;
-        const cardH = 180;
+        const cardH = card.offsetHeight || 200;
         const cardW = Math.min(320, window.innerWidth - 32);
         const cardLeft = Math.max(16, Math.min(r.left, window.innerWidth - cardW - 16));
 
+        const spaceAbove = r.top;
+        const spaceBelow = vph - r.bottom;
+        // Preferred side based on `arrow`: 'bottom' = card ABOVE target, 'top' = card BELOW target
+        let placeAbove = step.arrow === 'bottom';
+        // Flip if not enough space on preferred side
+        if (placeAbove && spaceAbove < cardH + 24 && spaceBelow >= cardH + 24) placeAbove = false;
+        else if (!placeAbove && spaceBelow < cardH + 24 && spaceAbove >= cardH + 24) placeAbove = true;
+
         let cardTop;
-        if (step.arrow === 'bottom' && r.top > cardH + 40) {
-          // card above target
-          cardTop = r.top - cardH - 18;
-          arrow.style.cssText = `bottom:-8px;left:${Math.min(r.left + r.width/2 - cardLeft - 7, cardW - 24)}px;transform:rotate(225deg);border-color:var(--accent) transparent transparent var(--accent);`;
+        const arrowLeftPx = Math.max(12, Math.min(r.left + r.width/2 - cardLeft - 7, cardW - 24));
+        if (placeAbove) {
+          cardTop = Math.max(16, r.top - cardH - 18);
+          arrow.style.cssText = `bottom:-8px;left:${arrowLeftPx}px;transform:rotate(225deg);border-color:var(--accent) transparent transparent var(--accent);`;
         } else {
-          // card below target
-          cardTop = r.bottom + 18;
-          arrow.style.cssText = `top:-8px;left:${Math.min(r.left + r.width/2 - cardLeft - 7, cardW - 24)}px;transform:rotate(45deg);border-color:var(--accent) transparent transparent var(--accent);`;
+          cardTop = Math.min(vph - cardH - 16, r.bottom + 18);
+          arrow.style.cssText = `top:-8px;left:${arrowLeftPx}px;transform:rotate(45deg);border-color:var(--accent) transparent transparent var(--accent);`;
         }
         card.style.left = `${cardLeft}px`;
         card.style.top = `${cardTop}px`;
