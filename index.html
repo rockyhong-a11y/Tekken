@@ -2756,10 +2756,18 @@
     // CORS/Cloudflare 때문에 브라우저 직접 호출이 막히면 공개 프록시를 경유한다.
     //  - r.jina.ai: 실제 렌더링 + Cloudflare 우회 + 모든 origin(file:// 포함) CORS 허용
     //  - allorigins/corsproxy: 원본 응답 그대로 반환 → JSON/HTML 파싱용
+    // HTML 스크래핑용 — jina(렌더링)를 먼저 시도
     const _MC_PROXIES = [
       (u) => `https://r.jina.ai/${u}`,
       (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
       (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    ];
+    // JSON API / 스크립트 추출용 — 원본 바디를 그대로 주는 프록시를 먼저 시도.
+    // (jina는 <script>를 제거하고 JSON을 마크다운으로 가공할 수 있어 뒤로 둔다)
+    const _MC_RAW_PROXIES = [
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+      (u) => `https://r.jina.ai/${u}`,
     ];
     const _MC_TYPE = { game: 13, movie: 2, tv: 1, anime: 1 }; // Metacritic recordType(typeId)
     const _MC_DEFAULT_KEY = '1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u'; // 홈페이지에 박혀 있는 공개 web API 키(폴백)
@@ -2771,7 +2779,7 @@
     async function getMetacriticApiKey() {
       if (_mcApiKey) return _mcApiKey;
       const home = 'https://www.metacritic.com/';
-      for (const makeProxy of _MC_PROXIES) {
+      for (const makeProxy of _MC_RAW_PROXIES) {
         try {
           const res = await fetch(makeProxy(home), { cache: 'no-store' });
           if (!res.ok) continue;
@@ -2802,8 +2810,8 @@
       if (!apiKey) return null;
       const typeId = _MC_TYPE[cat] || 13;
       const api = `${_MC_BACKEND}${encodeURIComponent(title)}/web?apiKey=${apiKey}&mcoTypeId=${typeId}`;
-      // 직접 호출 → 프록시 순으로 시도 (backend가 CORS를 허용하면 직접 호출만으로 끝남)
-      const attempts = [(u) => u, ..._MC_PROXIES];
+      // 직접 호출 → 원본바디 프록시 순으로 시도 (backend가 CORS를 허용하면 직접 호출만으로 끝남)
+      const attempts = [(u) => u, ..._MC_RAW_PROXIES];
       for (const makeUrl of attempts) {
         try {
           const res = await fetch(makeUrl(api), { cache: 'no-store' });
