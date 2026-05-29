@@ -1527,7 +1527,7 @@
       data: (profile) => `gametracker:profile:${profile}`,
       pin: (profile) => `gametracker:pin:${profile}`,
       localUpdatedAt: (profile) => `gametracker:localUpdatedAt:${profile}`,
-      mcCleared: (profile) => `gametracker:mcCleared:${profile}`,
+      mcReset: (profile) => `gametracker:mcReset:${profile}`,
       refreshToken: 'archivezero:refreshToken',
       authUid: 'archivezero:uid',
       authProfile: 'archivezero:authProfile',
@@ -1852,19 +1852,12 @@
     function loadGames(profile) {
       if (!profile) return [];
       const raw = localStorage.getItem(KEYS.data(profile));
-      let items = raw ? JSON.parse(raw) : [];
-      // 레거시 'anime' → 'tv' 정규화
-      items = items.map((g) => {
+      const items = raw ? JSON.parse(raw) : [];
+      return items.map((g) => {
         const c = g.category || 'game';
+        // 레거시 'anime' → 'tv'로 정규화
         return { ...g, category: c === 'anime' ? 'tv' : c };
       });
-      // 1회성 마이그레이션: RAWG 출처 metacritic 점수 전체 삭제 (metacritic.com으로 대체)
-      if (!localStorage.getItem(KEYS.mcCleared(profile))) {
-        items.forEach((g) => { g.metacritic = null; });
-        localStorage.setItem(KEYS.data(profile), JSON.stringify(items));
-        localStorage.setItem(KEYS.mcCleared(profile), '1');
-      }
-      return items;
     }
 
     function saveGames() {
@@ -2051,9 +2044,28 @@
       state._localUpdatedAt = Number(localStorage.getItem(KEYS.localUpdatedAt(name))) || 0;
       refreshProfileSelect();
       renderAll();
-      if (!skipPull && getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
-      // 백그라운드에서 metacritic == null 항목의 점수를 metacritic.com에서 조용히 채움
-      setTimeout(() => bgFetchMissingMetacritic(), 1500);
+      // 클라우드 pull이 끝난 뒤(또는 클라우드 미설정 시 즉시) 메타크리틱 리셋/보강을 실행.
+      // pull을 기다리지 않으면 클라우드의 옛 RAWG 점수가 로컬을 덮어써 리셋이 무효화된다.
+      if (!skipPull && getFirebaseUrl && getFirebaseUrl()) {
+        pullFromCloud().finally(() => runMetacriticReset());
+      } else {
+        runMetacriticReset();
+      }
+    }
+
+    // 1회성 메타크리틱 리셋: 기존 라이브러리의 RAWG 출처 점수를 전부 비우고
+    // metacritic.com에서 다시 받아온다. 클라우드에도 반영(saveGames → 푸시)되어
+    // 다른 기기에서도 옛 점수가 사라진다. 이후 로드부터는 비어 있는 항목만 보강.
+    async function runMetacriticReset() {
+      const profile = state.currentProfile;
+      if (!profile) return;
+      if (!localStorage.getItem(KEYS.mcReset(profile))) {
+        state.games.forEach((g) => { g.metacritic = null; });
+        saveGames();      // localUpdatedAt 갱신 + 클라우드로 비워진 상태 푸시
+        renderAll();
+        localStorage.setItem(KEYS.mcReset(profile), '1');
+      }
+      await bgFetchMissingMetacritic();
     }
 
     function createProfile(name, pin) {
