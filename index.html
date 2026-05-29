@@ -97,7 +97,8 @@
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
-      padding: 20px 32px;
+      /* iOS standalone(홈화면 추가) 모드에서 상태바와 안 겹치도록 safe-area 반영 */
+      padding: calc(20px + env(safe-area-inset-top)) 32px 20px;
       border-bottom: 1px solid var(--border);
       background: linear-gradient(180deg, var(--topbar-grad-top) 0%, var(--topbar-grad-bottom) 100%);
     }
@@ -160,7 +161,7 @@
 
     /* === Mobile (phone) optimization === */
     @media (max-width: 768px) {
-      .topbar { padding: 12px 16px; gap: 8px; }
+      .topbar { padding: calc(12px + env(safe-area-inset-top)) 16px 12px; gap: 8px; }
       .brand h1 { font-size: 18px; }
       .brand .tagline { font-size: 12px; margin-top: 2px; }
 
@@ -822,7 +823,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px;
+      padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
       overflow-y: auto;
     }
     .lock-card {
