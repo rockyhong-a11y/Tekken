@@ -4181,6 +4181,9 @@
       state.profiles = [];
       state.games = [];
       showLockScreen();
+      // 게스트 모드로 시작한 경우 initGoogleSignIn이 호출된 적 없어
+      // googleSignInBtn 영역이 비어 있다 → 명시적으로 초기화
+      initGoogleSignIn();
     }
 
     // Adjust profile dropdown visibility for guest vs authenticated
