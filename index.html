@@ -4215,31 +4215,40 @@
       const arrow = $('tutorialArrow');
 
       if (target) {
-        // Ensure target is in view (e.g. step targeting an element below the fold)
-        target.scrollIntoView({ block: 'center', behavior: 'instant' });
         const r = target.getBoundingClientRect();
+        const vph = window.innerHeight;
+        const vpw = window.innerWidth;
+
+        // If target has zero size or is completely off-screen, fall back to center card
+        if (r.width === 0 || r.height === 0 || r.bottom < 0 || r.top > vph) {
+          spotlight.style.cssText = 'width:0;height:0;box-shadow:none;';
+          card.style.cssText = 'left:50%;top:50%;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 32px));';
+          arrow.style.cssText = 'display:none';
+          return;
+        }
+
         const pad = 6;
         spotlight.style.left = `${r.left - pad}px`;
         spotlight.style.top = `${r.top - pad}px`;
         spotlight.style.width = `${r.width + pad * 2}px`;
         spotlight.style.height = `${r.height + pad * 2}px`;
 
-        // Position card: prefer arrow side, but auto-flip if it would go off-screen
-        const vph = window.innerHeight;
+        const cardW = Math.min(320, vpw - 32);
+        // Render card off-screen first to measure actual height
+        card.style.left = '-9999px';
+        card.style.top = '0';
+        card.style.bottom = '';
         const cardH = card.offsetHeight || 200;
-        const cardW = Math.min(320, window.innerWidth - 32);
-        const cardLeft = Math.max(16, Math.min(r.left, window.innerWidth - cardW - 16));
 
+        const cardLeft = Math.max(16, Math.min(r.left, vpw - cardW - 16));
         const spaceAbove = r.top;
         const spaceBelow = vph - r.bottom;
-        // Preferred side based on `arrow`: 'bottom' = card ABOVE target, 'top' = card BELOW target
         let placeAbove = step.arrow === 'bottom';
-        // Flip if not enough space on preferred side
         if (placeAbove && spaceAbove < cardH + 24 && spaceBelow >= cardH + 24) placeAbove = false;
         else if (!placeAbove && spaceBelow < cardH + 24 && spaceAbove >= cardH + 24) placeAbove = true;
 
-        let cardTop;
         const arrowLeftPx = Math.max(12, Math.min(r.left + r.width/2 - cardLeft - 7, cardW - 24));
+        let cardTop;
         if (placeAbove) {
           cardTop = Math.max(16, r.top - cardH - 18);
           arrow.style.cssText = `bottom:-8px;left:${arrowLeftPx}px;transform:rotate(225deg);border-color:var(--accent) transparent transparent var(--accent);`;
@@ -4247,12 +4256,13 @@
           cardTop = Math.min(vph - cardH - 16, r.bottom + 18);
           arrow.style.cssText = `top:-8px;left:${arrowLeftPx}px;transform:rotate(45deg);border-color:var(--accent) transparent transparent var(--accent);`;
         }
+        // Final clamp: ensure card is fully in viewport
+        cardTop = Math.max(16, Math.min(cardTop, vph - cardH - 16));
         card.style.left = `${cardLeft}px`;
         card.style.top = `${cardTop}px`;
-        card.style.bottom = '';
       } else {
         spotlight.style.cssText = 'width:0;height:0;box-shadow:none;';
-        card.style.cssText = 'left:50%;top:50%;transform:translate(-50%,-50%);';
+        card.style.cssText = 'left:50%;top:50%;transform:translate(-50%,-50%);width:min(320px,calc(100vw - 32px));';
         arrow.style.cssText = 'display:none';
       }
     }
