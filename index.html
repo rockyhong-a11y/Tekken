@@ -999,7 +999,6 @@
       position: fixed;
       border-radius: 10px;
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
-      transition: all 0.35s cubic-bezier(.4,0,.2,1);
       pointer-events: none;
       z-index: 3001;
     }
@@ -1012,7 +1011,6 @@
       padding: 18px 20px 14px;
       width: min(320px, calc(100vw - 32px));
       z-index: 3002;
-      transition: all 0.35s cubic-bezier(.4,0,.2,1);
     }
     .tutorial-step-label {
       font-size: 11px;
@@ -4185,30 +4183,20 @@
     let _tutStep = 0;
 
     function startTutorial() {
+      if (!$('tutorialOverlay')) return; // already removed
       _tutStep = 0;
       const overlay = $('tutorialOverlay');
       overlay.classList.remove('hidden');
-      overlay.setAttribute('aria-hidden', 'false');
       overlay.style.display = '';
       overlay.style.pointerEvents = '';
-      ['tutorialSpotlight', 'tutorialCard', 'tutorialArrow'].forEach((id) => {
-        const el = $(id);
-        if (el) el.style.display = '';
-      });
       renderTutorialStep();
     }
 
     function closeTutorial() {
-      const overlay = $('tutorialOverlay');
-      overlay.classList.add('hidden');
-      overlay.setAttribute('aria-hidden', 'true');
-      overlay.style.display = 'none';
-      overlay.style.pointerEvents = 'none';
       localStorage.setItem(KEYS.tutorialDone, '1');
-      ['tutorialSpotlight', 'tutorialCard', 'tutorialArrow'].forEach((id) => {
-        const el = $(id);
-        if (el) { el.style.cssText = ''; el.style.display = 'none'; }
-      });
+      // Remove from DOM entirely — the only 100% reliable way to stop blocking
+      const overlay = $('tutorialOverlay');
+      if (overlay) overlay.remove();
     }
 
     function renderTutorialStep() {
