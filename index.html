@@ -4186,16 +4186,29 @@
 
     function startTutorial() {
       _tutStep = 0;
-      $('tutorialOverlay').classList.remove('hidden');
-      $('tutorialOverlay').setAttribute('aria-hidden', 'false');
+      const overlay = $('tutorialOverlay');
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden', 'false');
+      overlay.style.display = '';
+      overlay.style.pointerEvents = '';
+      ['tutorialSpotlight', 'tutorialCard', 'tutorialArrow'].forEach((id) => {
+        const el = $(id);
+        if (el) el.style.display = '';
+      });
       renderTutorialStep();
     }
 
     function closeTutorial() {
-      $('tutorialOverlay').classList.add('hidden');
-      $('tutorialOverlay').setAttribute('aria-hidden', 'true');
+      const overlay = $('tutorialOverlay');
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.display = 'none';
+      overlay.style.pointerEvents = 'none';
       localStorage.setItem(KEYS.tutorialDone, '1');
-      $('tutorialSpotlight').style.cssText = '';
+      ['tutorialSpotlight', 'tutorialCard', 'tutorialArrow'].forEach((id) => {
+        const el = $(id);
+        if (el) { el.style.cssText = ''; el.style.display = 'none'; }
+      });
     }
 
     function renderTutorialStep() {
