@@ -2571,21 +2571,42 @@
       });
     }
 
-    async function applyLookupToForm(item) {
-      state.lastLookup = item;     // cast/감독/예고편 등 풀 메타 저장 — 저장 시 합쳐서 영속화
-      $('title').value = item.title || $('title').value;
-      $('genres').value = (item.genres || []).join(', ');
-      $('released').value = item.released || '';
-      $('coverImage').value = item.background_image || '';
-
-      const desc = item.description || '';
-      const truncated = desc.length > 600 ? desc.slice(0, 600) + '…' : desc;
-      if (!truncated) { $('description').value = ''; return; }
-      if (item._needsTranslation) {
-        $('description').value = '번역 중...';
-        $('description').value = await translateToKorean(truncated);
+    // 정보 불러오기 중에는 '추가' 버튼을 비활성화 — 사용자가 미완성 데이터로 저장하는 것 방지
+    let _lookupBusy = 0;
+    function setLookupBusy(on) {
+      _lookupBusy = Math.max(0, _lookupBusy + (on ? 1 : -1));
+      const btn = $('submitBtn');
+      if (!btn) return;
+      if (_lookupBusy > 0) {
+        btn.disabled = true;
+        btn.dataset.origText = btn.dataset.origText || btn.textContent;
+        btn.textContent = '불러오는 중…';
       } else {
-        $('description').value = truncated;
+        btn.disabled = false;
+        if (btn.dataset.origText) { btn.textContent = btn.dataset.origText; delete btn.dataset.origText; }
+      }
+    }
+
+    async function applyLookupToForm(item) {
+      setLookupBusy(true);
+      try {
+        state.lastLookup = item;     // cast/감독/예고편 등 풀 메타 저장 — 저장 시 합쳐서 영속화
+        $('title').value = item.title || $('title').value;
+        $('genres').value = (item.genres || []).join(', ');
+        $('released').value = item.released || '';
+        $('coverImage').value = item.background_image || '';
+
+        const desc = item.description || '';
+        const truncated = desc.length > 600 ? desc.slice(0, 600) + '…' : desc;
+        if (!truncated) { $('description').value = ''; return; }
+        if (item._needsTranslation) {
+          $('description').value = '번역 중...';
+          $('description').value = await translateToKorean(truncated);
+        } else {
+          $('description').value = truncated;
+        }
+      } finally {
+        setLookupBusy(false);
       }
     }
 
@@ -2714,6 +2735,24 @@
       }
 
       const editingId = $('editingId').value;
+      // 중복 검사 — 동일 카테고리 안에서 제목(대소문자·공백 무시)이 같은 항목이 있는지
+      const normTitle = game.title.toLowerCase().trim();
+      const sameCategory = (a, b) => {
+        const ga = a === 'game' ? 'game' : 'media';
+        const gb = (b === 'movie' || b === 'tv' || b === 'anime' || b === 'media') ? 'media' : 'game';
+        return ga === gb;
+      };
+      const currentScope = game.category === 'game' ? 'game' : 'media';
+      const dup = state.games.find((g) =>
+        g.id !== editingId &&
+        sameCategory(currentScope, g.category) &&
+        (g.title || '').toLowerCase().trim() === normTitle
+      );
+      if (dup) {
+        alert(`이미 등록된 ${currentScope === 'game' ? '게임' : '영상'}입니다: "${dup.title}"`);
+        return;
+      }
+
       if (editingId) {
         const idx = state.games.findIndex((g) => g.id === editingId);
         if (idx !== -1) {
@@ -2724,8 +2763,10 @@
         state.games.unshift(game);
       }
       saveGames();
+      const isEdit = !!editingId;
       resetForm();
       renderAll();
+      alert(`"${game.title}" ${isEdit ? '수정' : '추가'} 완료!`);
     }
 
     function editGame(id) {
@@ -2957,7 +2998,7 @@
             <h3>${escapeHtml(g.title)}</h3>
             <div class="badges">
               <span class="badge status-${g.status}">${statusLabel(g.status, 'game')}</span>
-              ${g.platform ? `<span class="badge">${escapeHtml(g.platform)}</span>` : ''}
+              ${g.platform ? (g.platform.split(',').map((p) => p.trim()).filter(Boolean).map((p) => `<span class="badge">${escapeHtml(p)}</span>`).join('')) : ''}
               ${genres}
             </div>
             <div class="info">
@@ -3038,7 +3079,7 @@
             <h3>${escapeHtml(g.title)}</h3>
             <div class="badges">
               <span class="badge status-${g.status}">${statusLabel(g.status, cat)}</span>
-              ${g.platform ? `<span class="badge">${escapeHtml(g.platform)}</span>` : ''}
+              ${g.platform ? (g.platform.split(',').map((p) => p.trim()).filter(Boolean).map((p) => `<span class="badge">${escapeHtml(p)}</span>`).join('')) : ''}
               ${genres}
             </div>
             ${g.released ? `<div class="info">📅 ${escapeHtml(g.released)}</div>` : ''}
@@ -3190,6 +3231,22 @@
       });
     }
 
+    // 다중 선택 — 콤마로 join, 클릭 시 토글
+    function setMultiChoiceValues(inputId, values, group) {
+      const arr = Array.isArray(values) ? values.filter(Boolean) : [];
+      $(inputId).value = arr.join(', ');
+      group.querySelectorAll('.choice-btn').forEach((b) => {
+        b.classList.toggle('selected', arr.includes(b.dataset.value));
+      });
+    }
+    function toggleMultiChoice(inputId, value, group) {
+      const cur = ($(inputId).value || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const idx = cur.indexOf(value);
+      if (idx === -1) cur.push(value);
+      else cur.splice(idx, 1);
+      setMultiChoiceValues(inputId, cur, group);
+    }
+
     // 상태/플랫폼 버튼 그룹을 현재 카테고리에 맞게 렌더 (선택값 유지)
     function renderChoiceGroups() {
       // 상태 — 순서: 엔딩(cleared) → 플레이 중/시청 중(playing) → 예정(planned), 기본 cleared
@@ -3200,14 +3257,19 @@
         .join('');
       setChoiceValue('status', curStatus, statusGroup);
 
-      // 플랫폼 / 시청 매체 — 값이 없으면 첫 옵션(게임=PC, 영상=OTT)을 기본 선택
+      // 플랫폼 / 시청 매체 — 게임은 다중 선택, 영상은 단일 선택
       const platGroup = $('platformGroup');
       const opts = PLATFORM_OPTIONS[currentCategory] || [];
-      let curPlat = $('platform').value;
-      if (curPlat && !opts.some((o) => o.value === curPlat)) {
-        curPlat = LEGACY_PLATFORM_MAP[curPlat] || '';
-      }
-      if (!curPlat) curPlat = (opts[0] || {}).value || '';
+      const isMulti = currentCategory === 'game';
+      platGroup.dataset.multi = isMulti ? '1' : '0';
+
+      const rawVal = $('platform').value || '';
+      let curList = rawVal.split(',').map((s) => s.trim()).filter(Boolean);
+      // 레거시 값 → 새 값 매핑 + 옵션에 없는 값 제거
+      curList = curList.map((v) => (opts.some((o) => o.value === v) ? v : (LEGACY_PLATFORM_MAP[v] || ''))).filter(Boolean);
+      curList = Array.from(new Set(curList));
+      if (!curList.length) curList = [(opts[0] || {}).value || ''].filter(Boolean);
+
       const iconOnly = currentCategory === 'game';
       platGroup.classList.toggle('icon-only', iconOnly);
       platGroup.innerHTML = opts.map((o) => {
@@ -3215,7 +3277,11 @@
         return `<button type="button" class="choice-btn" data-value="${escapeHtml(o.value)}" title="${escapeHtml(o.label)}" aria-label="${escapeHtml(o.label)}">` +
           `<span class="choice-icon">${o.icon}</span>${labelHtml}</button>`;
       }).join('');
-      setChoiceValue('platform', opts.some((o) => o.value === curPlat) ? curPlat : '', platGroup);
+      if (isMulti) {
+        setMultiChoiceValues('platform', curList, platGroup);
+      } else {
+        setChoiceValue('platform', curList[0] || '', platGroup);
+      }
     }
 
     function setCategory(cat) {
@@ -4348,7 +4414,13 @@
       });
       $('platformGroup').addEventListener('click', (e) => {
         const btn = e.target.closest('.choice-btn');
-        if (btn) setChoiceValue('platform', btn.dataset.value, $('platformGroup'));
+        if (!btn) return;
+        const group = $('platformGroup');
+        if (group.dataset.multi === '1') {
+          toggleMultiChoice('platform', btn.dataset.value, group);
+        } else {
+          setChoiceValue('platform', btn.dataset.value, group);
+        }
       });
       $('screenshots').addEventListener('change', async (e) => {
         await handleScreenshotInput(e.target.files);
