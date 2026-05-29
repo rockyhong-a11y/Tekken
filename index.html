@@ -951,6 +951,105 @@
       text-overflow: ellipsis;
     }
 
+    /* === Guest mode button & divider === */
+    .guest-start-btn {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .guest-start-btn:hover { opacity: 0.88; }
+    .guest-start-btn:active { transform: scale(0.98); }
+    .guest-btn-main { font-size: 16px; }
+    .guest-btn-sub { font-size: 11px; opacity: 0.82; font-weight: 400; }
+    .lock-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    .lock-divider::before, .lock-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* === Tutorial overlay === */
+    .tutorial-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 3000;
+      pointer-events: none;
+    }
+    .tutorial-overlay:not(.hidden) { pointer-events: auto; }
+    .tutorial-spotlight {
+      position: fixed;
+      border-radius: 10px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+      transition: all 0.35s cubic-bezier(.4,0,.2,1);
+      pointer-events: none;
+      z-index: 3001;
+    }
+    .tutorial-card {
+      position: fixed;
+      background: var(--surface);
+      border: 1.5px solid var(--accent);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+      padding: 18px 20px 14px;
+      width: min(320px, calc(100vw - 32px));
+      z-index: 3002;
+      transition: all 0.35s cubic-bezier(.4,0,.2,1);
+    }
+    .tutorial-step-label {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin: 0 0 4px;
+      text-transform: uppercase;
+    }
+    .tutorial-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .tutorial-body {
+      margin: 0 0 14px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .tutorial-arrow {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: var(--surface);
+      border-left: 1.5px solid var(--accent);
+      border-top: 1.5px solid var(--accent);
+      transform: rotate(45deg);
+    }
+    .tutorial-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .tutorial-btns { display: flex; gap: 8px; }
+    .tutorial-btns button { padding: 7px 14px; font-size: 13px; }
+
     /* === Steam import modal === */
     .steam-import-list {
       max-height: 320px;
@@ -1231,8 +1330,12 @@
 
       <!-- shown when not signed in -->
       <div id="lockAuthView" class="lock-pin-section">
-        <p class="lock-pin-hint">Google 계정으로 로그인하세요</p>
-        <div id="googleSignInBtn" style="display:flex;justify-content:center;margin:8px 0"></div>
+        <button type="button" id="guestStartBtn" class="guest-start-btn">
+          <span class="guest-btn-main">👤 게스트로 시작</span>
+          <span class="guest-btn-sub">이 기기에만 저장 · 클라우드 연동 없음</span>
+        </button>
+        <div class="lock-divider"><span>또는 Google 계정으로 동기화</span></div>
+        <div id="googleSignInBtn" style="display:flex;justify-content:center;margin:4px 0"></div>
         <p id="lockAuthLoading" class="muted" style="text-align:center;font-size:13px"></p>
         <p id="lockAuthError" class="lock-error"></p>
       </div>
@@ -1299,6 +1402,7 @@
           <button id="deleteProfileBtn" type="button" class="menu-item danger">🗑 프로필 삭제</button>
           <div class="menu-sep"></div>
           <button id="signOutBtn" type="button" class="menu-item">👋 로그아웃</button>
+          <button id="guestExitBtn" type="button" class="menu-item hidden">🚪 처음 화면으로</button>
         </div>
       </div>
       <button id="helpBtn" type="button" class="ghost" title="사용 방법">?</button>
@@ -1394,6 +1498,23 @@
     </div>
   </div>
 
+  <!-- Tutorial overlay -->
+  <div id="tutorialOverlay" class="tutorial-overlay hidden" aria-hidden="true">
+    <div class="tutorial-spotlight" id="tutorialSpotlight"></div>
+    <div class="tutorial-card" id="tutorialCard" role="dialog" aria-labelledby="tutorialTitle">
+      <p class="tutorial-step-label" id="tutorialStepLabel"></p>
+      <h3 class="tutorial-title" id="tutorialTitle"></h3>
+      <p class="tutorial-body" id="tutorialBody"></p>
+      <div class="tutorial-arrow" id="tutorialArrow"></div>
+      <div class="tutorial-nav">
+        <button type="button" id="tutorialSkipBtn" class="ghost" style="font-size:12px">건너뛰기</button>
+        <div class="tutorial-btns">
+          <button type="button" id="tutorialPrevBtn" class="ghost">← 이전</button>
+          <button type="button" id="tutorialNextBtn">다음 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <main class="tabbed">
     <section class="form-card" data-pane="form">
@@ -1531,6 +1652,8 @@
       refreshToken: 'archivezero:refreshToken',
       authUid: 'archivezero:uid',
       authProfile: 'archivezero:authProfile',
+      guestMode: 'gametracker:guestMode',
+      tutorialDone: 'gametracker:tutorialDone',
     };
 
     // === Profile PIN (4-digit) ===
@@ -1719,7 +1842,10 @@
       userEmail: null,
       userPhoto: null,
       _pendingAutoEnter: false, // 로그인 직후 1개 프로필 자동 입장용 1회성 플래그
+      isGuest: false,
     };
+
+    const GUEST_PROFILE = '__GUEST__';
 
     // === Utilities ===
     const $ = (id) => document.getElementById(id);
@@ -1935,7 +2061,7 @@
       state.profiles.forEach((p) => {
         const opt = document.createElement('option');
         opt.value = p;
-        opt.textContent = p;
+        opt.textContent = p === GUEST_PROFILE ? '게스트' : p;
         sel.appendChild(opt);
       });
       // 옵션을 모두 추가한 뒤 명시적으로 value를 지정해야 첫 옵션이 기본 선택되는
@@ -1944,7 +2070,8 @@
         sel.value = state.currentProfile;
       }
       const label = $('currentProfileName');
-      if (label) label.textContent = state.currentProfile || '프로필';
+      if (label) label.textContent = state.isGuest ? '게스트' : (state.currentProfile || '프로필');
+      if (typeof applyGuestUI === 'function') applyGuestUI();
     }
 
     // 클라우드의 /profiles 컬렉션에서 프로필 이름 목록을 가져온다
@@ -2071,6 +2198,7 @@
     function createProfile(name, pin) {
       name = (name || '').trim();
       if (!name) { alert('프로필 이름을 입력해주세요.'); return false; }
+      if (name === GUEST_PROFILE) { alert('사용할 수 없는 이름입니다.'); return false; }
       if (state.profiles.includes(name)) {
         alert('이미 존재하는 프로필 이름입니다.');
         return false;
@@ -3343,8 +3471,8 @@
 
     // === Tabbed page navigation ===
     const TAB_ORDER = ['game-add', 'game-library', 'media-add', 'media-library'];
-    let currentTab = localStorage.getItem('archive:tab') || 'game-library';
-    if (!TAB_ORDER.includes(currentTab)) currentTab = 'game-library';
+    let currentTab = localStorage.getItem('archive:tab') || 'game-add';
+    if (!TAB_ORDER.includes(currentTab)) currentTab = 'game-add';
 
     function setTab(tab, opts) {
       if (!TAB_ORDER.includes(tab)) return;
@@ -3980,6 +4108,145 @@
       await pushToCloud();
     }
 
+    // === Guest mode ===
+
+    async function enterGuestMode() {
+      state.isGuest = true;
+      state.uid = null;
+      state.idToken = null;
+      localStorage.setItem(KEYS.guestMode, '1');
+      // ensure guest profile exists
+      const stored = JSON.parse(localStorage.getItem(KEYS.profiles) || '[]');
+      if (!stored.includes(GUEST_PROFILE)) {
+        stored.push(GUEST_PROFILE);
+        localStorage.setItem(KEYS.profiles, JSON.stringify(stored));
+      }
+      state.profiles = [GUEST_PROFILE];
+      await switchProfile(GUEST_PROFILE, { skipPinCheck: true });
+      hideLockScreen();
+      setTab('game-add', { direction: 0 });
+      if (!localStorage.getItem(KEYS.tutorialDone)) {
+        setTimeout(startTutorial, 600);
+      }
+    }
+
+    function exitGuestMode() {
+      state.isGuest = false;
+      localStorage.removeItem(KEYS.guestMode);
+      state.currentProfile = null;
+      state.profiles = [];
+      state.games = [];
+      showLockScreen();
+    }
+
+    // Adjust profile dropdown visibility for guest vs authenticated
+    function applyGuestUI() {
+      const isG = state.isGuest;
+      const toggle = (id, hide) => { const el = $(id); if (el) el.classList.toggle('hidden', hide); };
+      toggle('newProfileBtn', isG);
+      toggle('renameProfileBtn', isG);
+      toggle('pinBtn', isG);
+      toggle('deleteProfileBtn', isG);
+      toggle('signOutBtn', isG);
+      toggle('guestExitBtn', !isG);
+      const label = $('currentProfileName');
+      if (label) label.textContent = isG ? '게스트' : (state.currentProfile || '프로필');
+    }
+
+    // === Tutorial ===
+
+    const TUTORIAL_STEPS = [
+      {
+        title: '🎮 게임을 추가해봐요',
+        body: '제목 입력란에 게임 이름을 입력하면 자동으로 정보를 가져옵니다.',
+        targetId: 'title',
+        arrow: 'bottom',
+      },
+      {
+        title: '📋 플랫폼 & 상태 선택',
+        body: '어떤 기기에서 하는지, 지금 어떤 상태인지 선택하세요.',
+        targetId: 'platformGroup',
+        arrow: 'top',
+      },
+      {
+        title: '✅ 추가 버튼으로 저장',
+        body: '입력이 끝나면 오른쪽 위의 추가 버튼을 눌러 저장하세요.',
+        targetId: 'submitBtn',
+        arrow: 'bottom',
+      },
+      {
+        title: '📚 라이브러리에서 확인',
+        body: '아래 탭 메뉴의 "게임 라이브러리"에서 저장한 게임을 확인할 수 있어요.',
+        targetId: 'bottomTabs',
+        arrow: 'top',
+      },
+    ];
+
+    let _tutStep = 0;
+
+    function startTutorial() {
+      _tutStep = 0;
+      $('tutorialOverlay').classList.remove('hidden');
+      $('tutorialOverlay').setAttribute('aria-hidden', 'false');
+      renderTutorialStep();
+    }
+
+    function closeTutorial() {
+      $('tutorialOverlay').classList.add('hidden');
+      $('tutorialOverlay').setAttribute('aria-hidden', 'true');
+      localStorage.setItem(KEYS.tutorialDone, '1');
+      $('tutorialSpotlight').style.cssText = '';
+    }
+
+    function renderTutorialStep() {
+      const step = TUTORIAL_STEPS[_tutStep];
+      const total = TUTORIAL_STEPS.length;
+      $('tutorialStepLabel').textContent = `${_tutStep + 1} / ${total}`;
+      $('tutorialTitle').textContent = step.title;
+      $('tutorialBody').textContent = step.body;
+      $('tutorialPrevBtn').style.visibility = _tutStep === 0 ? 'hidden' : '';
+      $('tutorialNextBtn').textContent = _tutStep === total - 1 ? '완료 ✓' : '다음 →';
+
+      // Position spotlight over target
+      const target = step.targetId ? $(step.targetId) : null;
+      const spotlight = $('tutorialSpotlight');
+      const card = $('tutorialCard');
+      const arrow = $('tutorialArrow');
+
+      if (target) {
+        const r = target.getBoundingClientRect();
+        const pad = 6;
+        spotlight.style.left = `${r.left - pad}px`;
+        spotlight.style.top = `${r.top - pad}px`;
+        spotlight.style.width = `${r.width + pad * 2}px`;
+        spotlight.style.height = `${r.height + pad * 2}px`;
+
+        // Position card: prefer above or below target
+        const vph = window.innerHeight;
+        const cardH = 180;
+        const cardW = Math.min(320, window.innerWidth - 32);
+        const cardLeft = Math.max(16, Math.min(r.left, window.innerWidth - cardW - 16));
+
+        let cardTop;
+        if (step.arrow === 'bottom' && r.top > cardH + 40) {
+          // card above target
+          cardTop = r.top - cardH - 18;
+          arrow.style.cssText = `bottom:-8px;left:${Math.min(r.left + r.width/2 - cardLeft - 7, cardW - 24)}px;transform:rotate(225deg);border-color:var(--accent) transparent transparent var(--accent);`;
+        } else {
+          // card below target
+          cardTop = r.bottom + 18;
+          arrow.style.cssText = `top:-8px;left:${Math.min(r.left + r.width/2 - cardLeft - 7, cardW - 24)}px;transform:rotate(45deg);border-color:var(--accent) transparent transparent var(--accent);`;
+        }
+        card.style.left = `${cardLeft}px`;
+        card.style.top = `${cardTop}px`;
+        card.style.bottom = '';
+      } else {
+        spotlight.style.cssText = 'width:0;height:0;box-shadow:none;';
+        card.style.cssText = 'left:50%;top:50%;transform:translate(-50%,-50%);';
+        arrow.style.cssText = 'display:none';
+      }
+    }
+
     // === Lock screen ===
     let lockSelectedProfile = null;
 
@@ -4234,6 +4501,26 @@
       $('signOutBtn').addEventListener('click', () => {
         if (confirm('로그아웃하시겠습니까?')) signOut();
       });
+      $('guestExitBtn').addEventListener('click', () => {
+        if (confirm('처음 화면으로 돌아가시겠습니까?\n게스트 데이터는 이 기기에 그대로 남아 있습니다.')) exitGuestMode();
+      });
+
+      // Tutorial
+      $('tutorialNextBtn').addEventListener('click', () => {
+        if (_tutStep < TUTORIAL_STEPS.length - 1) {
+          _tutStep++;
+          renderTutorialStep();
+        } else {
+          closeTutorial();
+        }
+      });
+      $('tutorialPrevBtn').addEventListener('click', () => {
+        if (_tutStep > 0) { _tutStep--; renderTutorialStep(); }
+      });
+      $('tutorialSkipBtn').addEventListener('click', closeTutorial);
+      window.addEventListener('resize', () => {
+        if (!$('tutorialOverlay').classList.contains('hidden')) renderTutorialStep();
+      });
 
       // Bottom tabs
       document.querySelectorAll('.bottom-tab').forEach((b) => {
@@ -4434,39 +4721,47 @@
       // 탭이 다시 보이거나 창에 포커스 돌아올 때 자동 pull
       // → 다른 기기에서 변경한 내용을 즉시 반영
       const refreshIfActive = () => {
-        if (state.currentProfile && document.visibilityState === 'visible' && getFirebaseUrl()) {
+        if (!state.isGuest && state.currentProfile && document.visibilityState === 'visible' && getFirebaseUrl()) {
           pullIfChanged();
         }
       };
       document.addEventListener('visibilitychange', refreshIfActive);
       window.addEventListener('focus', refreshIfActive);
 
-      // 앱 시작 시 항상 잠금화면을 먼저 보여준다
-      // 저장된 refresh token이 있으면 자동 로그인 시도, 없으면 Google 로그인 화면
-      const storedRefreshToken = localStorage.getItem(KEYS.refreshToken);
-      if (storedRefreshToken && FIREBASE_WEB_API_KEY && !FIREBASE_WEB_API_KEY.startsWith('AIzaSyBzx')) {
-        $('lockAuthLoading').textContent = '자동 로그인 중...';
-        showLockScreen(); // 미인증 상태이므로 lockAuthView가 보임 (스피너 표시)
-        refreshAuthToken().then(ok => {
-          if (ok) {
-            state.uid = localStorage.getItem(KEYS.authUid) || state.uid;
-            // 저장해둔 표시용 프로필 정보 복원 (이름/이메일/사진)
-            try {
-              const p = JSON.parse(localStorage.getItem(KEYS.authProfile) || '{}');
-              state.userDisplayName = p.name || '';
-              state.userEmail = p.email || '';
-              state.userPhoto = p.photo || '';
-            } catch {}
-            state._pendingAutoEnter = true; // 프로필 1개면 자동 입장
-            showLockScreen(); // 인증 완료 후 프로필 뷰 표시
-          } else {
-            initGoogleSignIn();
-            showLockScreen();
-          }
-        });
+      // Guest start button
+      $('guestStartBtn').addEventListener('click', enterGuestMode);
+
+      // 앱 시작 시: 게스트 모드로 저장된 세션이면 바로 진입, 아니면 잠금화면
+      if (localStorage.getItem(KEYS.guestMode)) {
+        // 이전에 게스트로 시작한 적 있음 → 바로 재진입
+        enterGuestMode();
       } else {
-        showLockScreen();
-        initGoogleSignIn();
+        // 저장된 refresh token이 있으면 자동 로그인 시도, 없으면 Google 로그인 화면
+        const storedRefreshToken = localStorage.getItem(KEYS.refreshToken);
+        if (storedRefreshToken && FIREBASE_WEB_API_KEY && !FIREBASE_WEB_API_KEY.startsWith('AIzaSyBzx')) {
+          $('lockAuthLoading').textContent = '자동 로그인 중...';
+          showLockScreen(); // 미인증 상태이므로 lockAuthView가 보임 (스피너 표시)
+          refreshAuthToken().then(ok => {
+            if (ok) {
+              state.uid = localStorage.getItem(KEYS.authUid) || state.uid;
+              // 저장해둔 표시용 프로필 정보 복원 (이름/이메일/사진)
+              try {
+                const p = JSON.parse(localStorage.getItem(KEYS.authProfile) || '{}');
+                state.userDisplayName = p.name || '';
+                state.userEmail = p.email || '';
+                state.userPhoto = p.photo || '';
+              } catch {}
+              state._pendingAutoEnter = true; // 프로필 1개면 자동 입장
+              showLockScreen(); // 인증 완료 후 프로필 뷰 표시
+            } else {
+              initGoogleSignIn();
+              showLockScreen();
+            }
+          });
+        } else {
+          showLockScreen();
+          initGoogleSignIn();
+        }
       }
     }
 
