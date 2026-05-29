@@ -1527,6 +1527,7 @@
       data: (profile) => `gametracker:profile:${profile}`,
       pin: (profile) => `gametracker:pin:${profile}`,
       localUpdatedAt: (profile) => `gametracker:localUpdatedAt:${profile}`,
+      mcCleared: (profile) => `gametracker:mcCleared:${profile}`,
       refreshToken: 'archivezero:refreshToken',
       authUid: 'archivezero:uid',
       authProfile: 'archivezero:authProfile',
@@ -1851,12 +1852,19 @@
     function loadGames(profile) {
       if (!profile) return [];
       const raw = localStorage.getItem(KEYS.data(profile));
-      const items = raw ? JSON.parse(raw) : [];
-      return items.map((g) => {
+      let items = raw ? JSON.parse(raw) : [];
+      // 레거시 'anime' → 'tv' 정규화
+      items = items.map((g) => {
         const c = g.category || 'game';
-        // 레거시 'anime' → 'tv'로 정규화
         return { ...g, category: c === 'anime' ? 'tv' : c };
       });
+      // 1회성 마이그레이션: RAWG 출처 metacritic 점수 전체 삭제 (metacritic.com으로 대체)
+      if (!localStorage.getItem(KEYS.mcCleared(profile))) {
+        items.forEach((g) => { g.metacritic = null; });
+        localStorage.setItem(KEYS.data(profile), JSON.stringify(items));
+        localStorage.setItem(KEYS.mcCleared(profile), '1');
+      }
+      return items;
     }
 
     function saveGames() {
@@ -2044,6 +2052,8 @@
       refreshProfileSelect();
       renderAll();
       if (!skipPull && getFirebaseUrl && getFirebaseUrl()) pullFromCloud();
+      // 백그라운드에서 metacritic == null 항목의 점수를 metacritic.com에서 조용히 채움
+      setTimeout(() => bgFetchMissingMetacritic(), 1500);
     }
 
     function createProfile(name, pin) {
@@ -2319,7 +2329,6 @@
           genres: (raw.genres || []).map((g) => translateGenre(g.name || g)),
           description: raw.description_raw || stripHtml(raw.description) || '',
           background_image: raw.background_image || '',
-          metacritic: raw.metacritic || null,
         };
       }
       if (currentCategory === 'media') return normalizeMedia(raw, raw._tmdbType || 'movie');
@@ -2501,9 +2510,6 @@
       if (itemCategory === 'game') {
         base.rawg_slug = (meta._raw && meta._raw.slug) || existing?.rawg_slug || '';
         base.rawg_id = meta._id || (meta._raw && meta._raw.id) || existing?.rawg_id || null;
-        base.metacritic = (meta._raw && meta._raw.metacritic != null) ? meta._raw.metacritic
-          : (meta.metacritic != null ? meta.metacritic
-          : (existing && existing.metacritic != null ? existing.metacritic : null));
       }
 
       if (itemCategory === 'movie' || itemCategory === 'tv') {
@@ -2830,6 +2836,26 @@
 
       // 폴백 안 함: 카테고리/제목 매칭이 안 되면 null 반환 (잘못된 점수 잡는 것보다 안 잡는 게 낫다)
       return null;
+    }
+
+    // 백그라운드에서 metacritic == null 항목들의 점수를 metacritic.com에서 조용히 채움
+    let _bgMcRunning = false;
+    async function bgFetchMissingMetacritic() {
+      if (_bgMcRunning) return;
+      const missing = state.games.filter((g) => g.metacritic == null);
+      if (!missing.length) return;
+      _bgMcRunning = true;
+      let changed = false;
+      for (const g of missing) {
+        try {
+          const cat = (g.category === 'movie' || g.category === 'tv') ? g.category : 'game';
+          const mc = await fetchMetacriticScore(g.title, cat);
+          if (mc != null) { g.metacritic = mc; changed = true; }
+        } catch (_) {}
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (changed) { saveGames(); renderAll(); }
+      _bgMcRunning = false;
     }
 
     // 리스트 뷰의 액션 버튼 그룹 — 영화/TV는 예고편 + TMDB, 게임은 공략 검색
@@ -3480,11 +3506,10 @@
           screenshots: [],
           rawg_slug: src ? (src.slug || '') : '',
           rawg_id: src ? (src.id || null) : null,
-          metacritic: src ? (src.metacritic || null) : null,
           createdAt: now + i,
         });
 
-        // Metacritic 점수 — metacritic.com 우선, 실패 시 RAWG 값 유지
+        // Metacritic 점수 — metacritic.com에서 직접 가져오기
         try {
           const mc = await fetchMetacriticScore(newGames[newGames.length - 1].title, 'game');
           if (mc != null) newGames[newGames.length - 1].metacritic = mc;
@@ -3523,8 +3548,11 @@
         if (g.genres && g.genres.length) g.genres = g.genres.map((x) => translateGenre(x));
       });
 
-      // 2) 설명/이미지/슬러그/메타스코어가 비어 있는 게임만 RAWG에서 보강
-      const need = games.filter((g) => !g.description || !g.background_image || !g.rawg_slug || g.metacritic == null);
+      // 2) 설명/이미지/슬러그가 비어 있는 게임만 RAWG에서 보강, 점수가 없는 게임은 metacritic.com에서 별도 보강
+      const needRawg = games.filter((g) => !g.description || !g.background_image || !g.rawg_slug);
+      const needMc = games.filter((g) => g.metacritic == null);
+      const needSet = new Set([...needRawg, ...needMc]);
+      const need = [...needSet];
 
       const btn = $('enrichBtn');
       _enriching = true;
@@ -3535,37 +3563,41 @@
         const g = need[i];
         btn.textContent = `보강 중… ${i + 1}/${need.length}`;
         try {
-          let id = g.rawg_id;
-          let listItem = null;
-          if (!id) {
-            const results = await rawgSearch(g.title);
-            if (results && results.length) { listItem = results[0]; id = listItem.id; }
-          }
-          if (id) {
-            const detail = await rawgDetail(id);
-            const src = detail || listItem;
-            if (src) {
-              if (!g.background_image && src.background_image) g.background_image = src.background_image;
-              if (!g.rawg_slug && src.slug) g.rawg_slug = src.slug;
-              if (!g.rawg_id && src.id) g.rawg_id = src.id;
-              if (g.metacritic == null && src.metacritic != null) g.metacritic = src.metacritic;
-              if ((!g.released || !g.released.length) && src.released) g.released = src.released;
-              if ((!g.genres || !g.genres.length) && src.genres) {
-                g.genres = src.genres.map((x) => translateGenre(x.name || x));
+          // RAWG 보강 — 설명/이미지/슬러그가 없는 경우만
+          if (!g.description || !g.background_image || !g.rawg_slug) {
+            let id = g.rawg_id;
+            let listItem = null;
+            if (!id) {
+              const results = await rawgSearch(g.title);
+              if (results && results.length) { listItem = results[0]; id = listItem.id; }
+            }
+            if (id) {
+              const detail = await rawgDetail(id);
+              const src = detail || listItem;
+              if (src) {
+                if (!g.background_image && src.background_image) g.background_image = src.background_image;
+                if (!g.rawg_slug && src.slug) g.rawg_slug = src.slug;
+                if (!g.rawg_id && src.id) g.rawg_id = src.id;
+                if ((!g.released || !g.released.length) && src.released) g.released = src.released;
+                if ((!g.genres || !g.genres.length) && src.genres) {
+                  g.genres = src.genres.map((x) => translateGenre(x.name || x));
+                }
+                if (!g.description && detail) {
+                  const raw = detail.description_raw || stripHtml(detail.description) || '';
+                  const truncated = raw.length > 600 ? raw.slice(0, 600) + '…' : raw;
+                  g.description = truncated ? await translateToKorean(truncated) : '';
+                }
+                updated++;
               }
-              if (!g.description && detail) {
-                const raw = detail.description_raw || stripHtml(detail.description) || '';
-                const truncated = raw.length > 600 ? raw.slice(0, 600) + '…' : raw;
-                g.description = truncated ? await translateToKorean(truncated) : '';
-              }
-              updated++;
             }
           }
-          // Metacritic 점수 — metacritic.com에서 직접 가져와 덮어쓰기
-          try {
-            const mc = await fetchMetacriticScore(g.title, 'game');
-            if (mc != null) g.metacritic = mc;
-          } catch (_) { /* 무시 */ }
+          // Metacritic 점수 — metacritic.com에서 직접 가져오기 (null인 경우만)
+          if (g.metacritic == null) {
+            try {
+              const mc = await fetchMetacriticScore(g.title, 'game');
+              if (mc != null) g.metacritic = mc;
+            } catch (_) { /* 무시 */ }
+          }
         } catch (_) { /* 개별 실패는 건너뜀 */ }
         if (i < need.length - 1) await new Promise((r) => setTimeout(r, 200));
       }
