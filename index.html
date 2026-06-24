@@ -1482,77 +1482,60 @@
     .extra-toggle-arrow { font-size: 10px; }
     .extra-fields { display: flex; flex-direction: column; gap: 12px; }
 
-    /* === Form category toggle (게임/영상) === */
-    .form-category-toggle {
-      display: flex;
-      gap: 4px;
-      padding: 4px;
-      background: rgba(255,255,255,0.06);
-      border-radius: 999px;
+/* === iOS Large Title === */
+    .library-large-title {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      padding: 8px 4px 16px;
+      margin: 0;
+      color: var(--text);
+    }
+
+    /* === iOS Segmented Control (라이브러리 게임/영상) === */
+    .type-filter {
+      background: rgba(118, 118, 128, 0.20);
+      border-radius: 9px;
+      padding: 2px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
       margin-bottom: 16px;
     }
-    [data-theme="light"] .form-category-toggle { background: rgba(0,0,0,0.06); }
-    .cat-pill {
-      flex: 1;
+    [data-theme="light"] .type-filter { background: rgba(118, 118, 128, 0.16); }
+    .seg-btn {
+      padding: 7px 10px;
       background: transparent;
-      color: var(--text-2);
       border: none;
-      border-radius: 999px;
-      padding: 8px 12px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      box-shadow: none;
-      transition: background 0.15s, color 0.15s, font-weight 0.15s;
-    }
-    .cat-pill:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-    [data-theme="light"] .cat-pill:hover { background: rgba(0,0,0,0.04); }
-    .cat-pill.active {
-      background: var(--surface);
-      color: var(--text);
-      font-weight: 600;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-    }
-    [data-theme="light"] .cat-pill.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-
-    /* === Library type filter chips === */
-    .type-filter {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
-    }
-    .type-filter-chip {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.10);
       color: var(--text-2);
-      padding: 6px 14px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 500;
+      border-radius: 7px;
       cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
       box-shadow: none;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      transition: background 0.18s, color 0.18s, transform 0.1s;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      justify-content: center;
+      gap: 6px;
     }
-    [data-theme="light"] .type-filter-chip { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.10); }
-    .type-filter-chip:hover { background: rgba(255,255,255,0.14); color: var(--text); }
-    [data-theme="light"] .type-filter-chip:hover { background: rgba(0,0,0,0.10); }
-    .type-filter-chip.active {
-      background: var(--accent);
-      border-color: transparent;
-      color: #fff;
-      font-weight: 600;
-      box-shadow: 0 2px 10px rgba(124,92,255,0.35);
+    .seg-btn:hover { color: var(--text); }
+    .seg-btn.on {
+      background: rgba(99, 99, 102, 0.65);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 3px 8px rgba(0, 0, 0, 0.18);
     }
-    .type-filter-chip .chip-count {
+    [data-theme="light"] .seg-btn.on { background: #ffffff; color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+    .seg-btn:active { transform: scale(0.97); }
+    .seg-count {
       font-size: 11px;
-      opacity: 0.75;
+      opacity: 0.65;
       font-variant-numeric: tabular-nums;
+      font-weight: 500;
     }
-    .type-filter-chip.active .chip-count { opacity: 0.9; }
+    .seg-btn.on .seg-count { opacity: 0.85; }
 
     /* === 플랫폼 아이콘 전용 모드 (게임 카테고리) === */
     .choice-group.icon-only .choice-btn {
@@ -1764,6 +1747,7 @@
 
   <main class="tabbed">
     <section class="form-card" data-pane="form">
+      <h1 class="library-large-title">추가</h1>
       <div class="form-card-header">
         <h2 id="formTitle">새 항목 추가</h2>
         <div class="form-header-actions">
@@ -1771,9 +1755,9 @@
           <button type="button" id="resetBtn" class="ghost">초기화</button>
         </div>
       </div>
-      <div class="form-category-toggle" id="formCategoryToggle" role="tablist" aria-label="추가 항목 종류">
-        <button type="button" class="cat-pill active" data-cat="game" role="tab">🎮 게임</button>
-        <button type="button" class="cat-pill" data-cat="media" role="tab">🎬 영상</button>
+      <div class="form-category-toggle type-filter" id="formCategoryToggle" role="tablist" aria-label="추가 항목 종류">
+        <button type="button" class="seg-btn on" data-cat="game" role="tab">🎮 게임</button>
+        <button type="button" class="seg-btn" data-cat="media" role="tab">🎬 영상</button>
       </div>
       <form id="gameForm" class="game-form">
         <div class="field">
@@ -1832,8 +1816,8 @@
     </section>
 
     <section class="library" data-pane="library">
+      <h1 class="library-large-title">라이브러리</h1>
       <div class="library-header">
-        <h2>내 라이브러리</h2>
         <div class="library-toolbar">
           <input type="search" id="searchInput" placeholder="🔍 검색" />
           <select id="sortBy" class="sort-select" title="정렬">
@@ -3057,11 +3041,10 @@
       });
     }
 
-    // 통합 라이브러리: type 필터(all/game/media)에 맞춰 추림
+    // 라이브러리 세그먼트 컨트롤 (game/media) 기준으로 항목 추림
     function categoryGames() {
       return state.games.filter((g) => {
         const itemCat = g.category || 'game';
-        if (libraryTypeFilter === 'all') return true;
         if (libraryTypeFilter === 'game') return itemCat === 'game';
         return itemCat !== 'game'; // 'media'
       });
@@ -3073,16 +3056,15 @@
       const all = state.games;
       const gameCount = all.filter((g) => (g.category || 'game') === 'game').length;
       const mediaCount = all.length - gameCount;
-      const chips = [
-        { key: 'all', label: '전체', count: all.length },
-        { key: 'game', label: '🎮 게임', count: gameCount },
+      const segs = [
+        { key: 'game',  label: '🎮 게임', count: gameCount },
         { key: 'media', label: '🎬 영상', count: mediaCount },
       ];
-      box.innerHTML = chips.map((c) => {
+      box.innerHTML = segs.map((c) => {
         const active = libraryTypeFilter === c.key;
-        return `<button type="button" class="type-filter-chip ${active ? 'active' : ''}" data-type="${c.key}" aria-pressed="${active}">${escapeHtml(c.label)}<span class="chip-count">${c.count}</span></button>`;
+        return `<button type="button" class="seg-btn ${active ? 'on' : ''}" data-type="${c.key}" role="tab" aria-selected="${active}">${escapeHtml(c.label)}<span class="seg-count">${c.count}</span></button>`;
       }).join('');
-      box.querySelectorAll('.type-filter-chip').forEach((b) => {
+      box.querySelectorAll('.seg-btn').forEach((b) => {
         b.addEventListener('click', () => setLibraryType(b.dataset.type));
       });
     }
@@ -3106,9 +3088,9 @@
       const q = $('searchInput').value.toLowerCase().trim();
       return state.games.filter((g) => {
         const itemCat = g.category || 'game';
-        // game 탭: game 항목만. media 탭: game 외 모든 항목 (movie/tv/anime 레거시 포함).
-        if (currentCategory === 'game' && itemCat !== 'game') return false;
-        if (currentCategory === 'media' && itemCat === 'game') return false;
+        // 라이브러리 세그먼트 컨트롤(libraryTypeFilter)에 맞춰 필터
+        if (libraryTypeFilter === 'game' && itemCat !== 'game') return false;
+        if (libraryTypeFilter === 'media' && itemCat === 'game') return false;
         if (!state.statusFilter[g.status]) return false;
         if (q) {
           const hay = [g.title, ...(g.genres || []), g.platform, g.note, g.description].join(' ').toLowerCase();
@@ -3542,8 +3524,8 @@
       applyCategoryUI();
       resetForm();
       renderAll();
-      document.querySelectorAll('#formCategoryToggle .cat-pill').forEach((x) => {
-        x.classList.toggle('active', x.dataset.cat === cat);
+      document.querySelectorAll('#formCategoryToggle .seg-btn').forEach((x) => {
+        x.classList.toggle('on', x.dataset.cat === cat);
       });
     }
 
@@ -3558,9 +3540,9 @@
       return 'library';
     })();
 
-    // 라이브러리 통합 필터: 'all' | 'game' | 'media'
-    let libraryTypeFilter = localStorage.getItem('archive:libType') || 'all';
-    if (!['all','game','media'].includes(libraryTypeFilter)) libraryTypeFilter = 'all';
+    // 라이브러리 세그먼트 컨트롤: 'game' | 'media'
+    let libraryTypeFilter = localStorage.getItem('archive:libType') || 'game';
+    if (!['game','media'].includes(libraryTypeFilter)) libraryTypeFilter = 'game';
 
     function setTab(tab, opts) {
       if (!TAB_ORDER.includes(tab)) return;
@@ -3596,11 +3578,11 @@
     }
 
     function setLibraryType(type) {
-      if (!['all','game','media'].includes(type)) return;
+      if (!['game','media'].includes(type)) return;
       libraryTypeFilter = type;
       localStorage.setItem('archive:libType', type);
-      // Steam/Enrich 메뉴 노출 상태 갱신
-      const showGameTools = type === 'game' || type === 'all';
+      // Steam/Enrich 메뉴는 게임 세그먼트에서만 노출
+      const showGameTools = type === 'game';
       const sb = $('steamImportBtn'); if (sb) sb.classList.toggle('hidden', !showGameTools);
       const eb = $('enrichBtn'); if (eb) eb.classList.toggle('hidden', !showGameTools);
       renderAll();
@@ -4610,17 +4592,14 @@
       });
 
       // Form 내부의 카테고리 토글 (게임 / 영상)
-      document.querySelectorAll('#formCategoryToggle .cat-pill').forEach((b) => {
+      document.querySelectorAll('#formCategoryToggle .seg-btn').forEach((b) => {
         b.addEventListener('click', () => {
           setCategory(b.dataset.cat);
-          document.querySelectorAll('#formCategoryToggle .cat-pill').forEach((x) => {
-            x.classList.toggle('active', x.dataset.cat === b.dataset.cat);
-          });
         });
       });
       // 초기 활성 상태 동기화
-      document.querySelectorAll('#formCategoryToggle .cat-pill').forEach((x) => {
-        x.classList.toggle('active', x.dataset.cat === currentCategory);
+      document.querySelectorAll('#formCategoryToggle .seg-btn').forEach((x) => {
+        x.classList.toggle('on', x.dataset.cat === currentCategory);
       });
 
       applyCategoryUI();
